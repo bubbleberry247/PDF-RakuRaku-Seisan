@@ -1,0 +1,15 @@
+# ログファイル
+log/
+*.log
+
+# 一時ファイル
+work/
+backup/
+tmpclaude-*
+
+# Python キャッシュ
+__pycache__/
+*.pyc
+
+# データファイル（必要に応じてコメントアウト）
+# data/
