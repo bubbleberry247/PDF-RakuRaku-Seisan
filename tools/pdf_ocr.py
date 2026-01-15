@@ -37,6 +37,7 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent))
 from common.logger import get_logger
 from pdf_rotation_detect import PDFRotationDetector
+from ocr_dictionary import correct_ocr_text
 
 
 @dataclass
@@ -253,18 +254,30 @@ class PDFOCRProcessor:
             result.error = "テキストが空です"
             return result
 
-        # CJK互換漢字を正規化
+        # OCR誤認識補正（辞書ベース）
+        text = correct_ocr_text(text)
+
+        # CJK互換漢字を正規化（レガシー処理、辞書補正でカバーされない分）
         text = self.normalize_cjk(text)
 
         # --- 事業者登録番号を抽出 ---
         # T + 13桁の数字（ハイフン・スペースあり対応）
         invoice_patterns = [
+            # 基本パターン（既存）
             r'[TＴ][\s\-]*(\d[\d\s\-]{11,17}\d)',  # T1-0107-0102-6820 形式
             r'登録番号[:\s：]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
             r'インボイス[:\s：]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
+            # 追加パターン: ラベル付き
+            r'事業者[登録]*番号[:\s：]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
+            r'適格請求書[発行]*事業者[:\s：]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
+            r'適格[:\s：]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
+            r'Invoice\s*(?:No|Number)?[:\s\.]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
+            # OCR誤認識対応（Tが7や1に誤認識される場合）- ラベル直後のみ
+            r'登録番号[:\s：]*[7１1][\s\-]*(\d[\d\s\-]{11,17}\d)',
+            r'事業者番号[:\s：]*[7１1][\s\-]*(\d[\d\s\-]{11,17}\d)',
         ]
         for pattern in invoice_patterns:
-            match = re.search(pattern, text)
+            match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 # ハイフン・スペースを除去して13桁に正規化
                 raw_num = re.sub(r'[\s\-]', '', match.group(1))
@@ -285,42 +298,54 @@ class PDFOCRProcessor:
         # 数字間のスペースを除去（金額内のみ）
         cleaned_text = re.sub(r'(\d)\s+(\d{3})\s*[-\-ー円]', r'\1\2', cleaned_text)
 
-        # 様々な金額パターンに対応
-        amount_patterns = [
-            r'合計[金額]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)\s*円?',
-            r'請求金額[:\s：]*[¥\\￥]?\s*([\d,，\.]+)\s*円?',
-            r'ご請求額[:\s：]*[¥\\￥]?\s*([\d,，\.]+)\s*円?',
-            r'税込[金額合計]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)\s*円?',
-            r'[¥\\￥]\s*([\d,，\.]+)\s*[-\-ー]*',  # ¥200- 形式（高速道路など）
-            r'([\d,，\.]+)\s*円',  # 〇〇円形式
-            r'[¥￥\\]([\d,，\.]+)',  # ¥記号の後の金額
-            r'現計[:\s：]*[¥\\￥]?\s*([\d,，\.]+)',  # 現計
-            r'通行料金[:\s：]*[¥\\￥]?\s*([\d,，\.]+)',  # 高速道路
-            r'駐車料金[:\s：（(]*[一般]*[）):\s：]*\s*([\d,，\.]+)',  # 駐車場
-            r'クレジット支払[:\s：]*\s*([\d,，\.]+)',  # クレジット支払
-            r'料金計[:\s：]*\s*([\d,，\.]+)',  # 料金計
-            r'お預り[:\s：]*\s*([\d,，\.]+)',  # レシートのお預り金額
-            r'小計[:\s：]*[¥\\￥]?\s*([\d,，\.]+)',  # 小計
-            r'支払[い]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)',  # 支払い
-            r'お買[い]?上[げ]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)',  # お買上げ
-            r'領収[金額]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)',  # 領収金額
+        # 様々な金額パターンに対応（優先度付き）
+        # (パターン, 優先度) - 優先度が高いパターンで見つかった金額を優先
+        amount_patterns_priority = [
+            # 最優先: 明示的な合計・請求金額（優先度10）
+            (r'(?:合計金額|ご請求金額|請求金額)[:\s：]*[¥\\￥]?\s*([\d,，\.]+)\s*円?', 10),
+            (r'(?:税込合計|税込金額)[:\s：]*[¥\\￥]?\s*([\d,，\.]+)\s*円?', 10),
+            # 高優先: 一般的な合計表現（優先度8）
+            (r'合計[:\s：]*[¥\\￥]?\s*([\d,，\.]+)\s*円?', 8),
+            (r'現計[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 8),
+            (r'ご請求額[:\s：]*[¥\\￥]?\s*([\d,，\.]+)\s*円?', 8),
+            (r'お買[い]?上[げ]?[金額計]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 8),
+            # 中優先: 業種別表現（優先度7）
+            (r'通行料金[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 7),
+            (r'駐車料金[:\s：（(]*[一般]*[）):\s：]*\s*([\d,，\.]+)', 7),
+            (r'クレジット支払[:\s：]*\s*([\d,，\.]+)', 7),
+            (r'料金計[:\s：]*\s*([\d,，\.]+)', 7),
+            (r'領収[金額]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 7),
+            # 中低優先: 汎用パターン（優先度6）
+            (r'税込[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 6),
+            (r'支払[い]?[金額計]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 6),
+            # 低優先: 小計・¥記号（優先度5）
+            (r'小計[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 5),
+            (r'[¥\\￥]\s*([\d,，\.]+)\s*[-\-ー]*', 5),
+            # 最低優先: 単独の円表記（優先度4）
+            (r'([\d,，\.]+)\s*円', 4),
+            # 除外: 「お預り」は採用しない（受取金額であり請求額ではない）
         ]
-        amounts = []
-        for pattern in amount_patterns:
+
+        best_amount = 0
+        best_priority = 0
+
+        for pattern, priority in amount_patterns_priority:
             # クリーニング済みテキストで検索
             matches = re.findall(pattern, cleaned_text, re.MULTILINE)
             for m in matches:
                 try:
                     # ピリオドも除去（1.100円 → 1100円）
                     amount = int(re.sub(r'[,，\.]', '', m))
-                    if amount >= 100:  # 100円以上を有効とする
-                        amounts.append(amount)
+                    if amount >= 100 and amount <= 10000000:  # 100円以上、1000万円以下
+                        # 優先度が高い、または同じ優先度で金額が大きい場合に更新
+                        if priority > best_priority or (priority == best_priority and amount > best_amount):
+                            best_amount = amount
+                            best_priority = priority
                 except ValueError:
                     pass
 
-        if amounts:
-            # 最大金額を採用（合計金額である可能性が高い）
-            result.amount = max(amounts)
+        if best_amount > 0:
+            result.amount = best_amount
 
         # --- 日付を抽出 (E案: CJK正規化 + 令和変換 + 複数行対応 + TEL除外) ---
         # 電話番号行を除外
@@ -328,10 +353,13 @@ class PDFOCRProcessor:
         filtered_lines = [l for l in lines if not re.search(r'TEL|FAX|電話', l, re.IGNORECASE)]
         filtered_text = '\n'.join(filtered_lines)
 
-        # 「請求日」ラベルの近くにある日付を探す（複数行対応）
+        # 日付ラベルのリスト（優先順）
+        date_labels = ['請求日', '発行日', '利用日', '購入日', '取引日', '日付', '発行']
+
+        # 「請求日」等のラベルの近くにある日付を探す（複数行対応）
         date_found = False
         for i, line in enumerate(filtered_lines):
-            if '請求日' in line or '発行日' in line:
+            if any(label in line for label in date_labels):
                 # 同じ行に日付があるか - 令和形式
                 match = re.search(r'令和\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', line)
                 if match:
@@ -375,16 +403,16 @@ class PDFOCRProcessor:
         if not date_found:
             for match in re.finditer(r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', filtered_text):
                 year, month, day = int(match.group(1)), int(match.group(2)), int(match.group(3))
-                if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+                if 2026 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
                     result.issue_date = f"{year:04d}{month:02d}{day:02d}"
                     date_found = True
                     break
 
-        # YYYY/MM/DD形式（レシート等）
+        # YYYY/MM/DD形式（レシート等）・YYYY.MM.DD形式（ドット区切り）
         if not date_found:
-            for match in re.finditer(r'(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})', filtered_text):
+            for match in re.finditer(r'(\d{4})[/\-\.](\d{1,2})[/\-\.](\d{1,2})', filtered_text):
                 year, month, day = int(match.group(1)), int(match.group(2)), int(match.group(3))
-                if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+                if 2026 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
                     result.issue_date = f"{year:04d}{month:02d}{day:02d}"
                     date_found = True
                     break
@@ -421,11 +449,28 @@ class PDFOCRProcessor:
         if not date_found:
             for match in re.finditer(r'(\d{4})年(\d{2})月(\d{2})日\d{2}時\d{2}分', text):
                 year, month, day = int(match.group(1)), int(match.group(2)), int(match.group(3))
-                if 2000 <= year <= 2100:
+                if 2026 <= year <= 2100:
                     result.issue_date = f"{year:04d}{month:02d}{day:02d}"
                     break
 
         # --- 取引先名を抽出 ---
+        # 除外パターン（これを含む行は取引先としない）
+        vendor_exclude_patterns = [
+            r'御中', r'様$', r'殿$',
+            r'トナリティ', r'しごとラボ',  # 自社名
+            r'^\d+$',  # 数字のみ
+            r'^[ァ-ヶー]{1,2}$',  # カタカナ1-2文字のみ
+            r'合計', r'小計', r'税込', r'税抜',  # 金額ラベル
+            r'^〒', r'^\d{3}-\d{4}',  # 郵便番号
+        ]
+
+        def is_excluded_vendor(line: str) -> bool:
+            """取引先として除外すべき行か判定"""
+            for pattern in vendor_exclude_patterns:
+                if re.search(pattern, line):
+                    return True
+            return False
+
         # 「御請求書」「請求書」ラベルの直前にある会社名を優先（発行元）
         lines = text.split('\n')
         company_patterns = [
@@ -437,11 +482,12 @@ class PDFOCRProcessor:
             r'^([ァ-ヶー・a-zA-Z]+株式会社.*)$',  # カタカナ・英字で始まる会社名
             r'^(.+・.+株式会社)$',  # 中黒を含む会社名
             r'^(ニトリ|セリア|Seria|ダイソー|DAISO|キャンドゥ|CanDo).*$',  # 小売店
-            r'^(.+店)$',  # 〇〇店形式
+            r'^(.{3,}(?:本店|支店|営業所))$',  # 支店名（3文字以上＋本店/支店/営業所）
             r'^(.+コンセッション.*)$',  # 道路コンセッション会社
             r'^(名鉄協商.*)$',  # 名鉄協商（駐車場）
             r'^(.+パーキング.*)$',  # パーキング
             r'^(郵便局.*)$',  # 郵便局
+            r'^(.{3,}店)$',  # 〇〇店形式（3文字以上＋店）- 誤マッチ防止
         ]
 
         # 戦略1: 「御請求書」「請求書」の直前数行にある会社名を探す
@@ -451,14 +497,14 @@ class PDFOCRProcessor:
                 # 直前5行を逆順に探索
                 for j in range(max(0, i-5), i):
                     prev_line = lines[j].strip()
-                    # 宛先行をスキップ
-                    if '御中' in prev_line or 'トナリティ' in prev_line or 'しごとラボ' in prev_line:
+                    # 除外パターンチェック
+                    if is_excluded_vendor(prev_line):
                         continue
                     for pattern in company_patterns:
                         match = re.match(pattern, prev_line)
                         if match:
                             vendor = match.group(1).strip()
-                            if len(vendor) >= 2:
+                            if len(vendor) >= 2 and not is_excluded_vendor(vendor):
                                 result.vendor_name = vendor
                                 break
                     if result.vendor_name:
@@ -469,14 +515,14 @@ class PDFOCRProcessor:
         if not result.vendor_name:
             for line in lines:
                 line = line.strip()
-                # 宛先行（御中を含む）やしごとラボをスキップ
-                if '御中' in line or 'トナリティ' in line or 'しごとラボ' in line:
+                # 除外パターンチェック
+                if is_excluded_vendor(line):
                     continue
                 for pattern in company_patterns:
                     match = re.match(pattern, line)
                     if match:
                         vendor = match.group(1).strip()
-                        if len(vendor) >= 2:
+                        if len(vendor) >= 2 and not is_excluded_vendor(vendor):
                             result.vendor_name = vendor
                             break
                 if result.vendor_name:
@@ -488,7 +534,7 @@ class PDFOCRProcessor:
                 (r'愛知道路コンセッション', '愛知道路コンセッション株式会社'),
                 (r'名鉄協商', '名鉄協商株式会社'),
                 (r'名鉄t.*パーキング', '名鉄協商株式会社'),
-                (r'刈谷市会計管理者', '刈谷市'),
+                (r'刈谷市会計管理者', '刈谷市会計管理者'),
                 (r'刈谷市登録番号', '刈谷市'),
                 (r'多治見市', 'バロー'),  # 岐阜県多治見市のスーパー
                 (r'沖縄料理', '沖縄料理店'),
@@ -535,7 +581,7 @@ class PDFOCRProcessor:
                 (r'ケーヨー|K-YO', 'ケーヨー'),
                 # 駐車場
                 (r'タイムズ|Times', 'タイムズ'),
-                (r'三井のリパーク|リパーク', '三井のリパーク'),
+                (r'三井のリパーク|リパーク', '三井不動産リアルティ株式会社'),
                 (r'NPC24H', 'NPC24H'),
             ]
             for pattern, vendor_name in special_vendors:
@@ -567,7 +613,7 @@ class PDFOCRProcessor:
         date_match = re.search(r'(\d{4})[,\.](\d{1,2})[,\.](\d{1,2})', name)
         if date_match:
             year, month, day = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
-            if 2000 <= year <= 2100:
+            if 2026 <= year <= 2100:
                 info['date'] = f"{year:04d}{month:02d}{day:02d}"
 
         # MMDDで始まるパターン（0109セリア → 2026年1月9日と推定）
@@ -586,7 +632,7 @@ class PDFOCRProcessor:
             date_match = re.search(r'_(\d{4})(\d{2})(\d{2})_', name)
             if date_match:
                 year, month, day = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
-                if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+                if 2026 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
                     info['date'] = f"{year:04d}{month:02d}{day:02d}"
 
         # ファイル名末尾のYYYYMMDD（20260109181028.pdf → 20260109）
@@ -594,7 +640,15 @@ class PDFOCRProcessor:
             date_match = re.search(r'(\d{4})(\d{2})(\d{2})\d*\.pdf$', filename, re.IGNORECASE)
             if date_match:
                 year, month, day = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
-                if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+                if 2026 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+                    info['date'] = f"{year:04d}{month:02d}{day:02d}"
+
+        # ファイル名内のYYYYMMDD形式（doc06591420260109181028.pdf → 20260109）
+        if not info['date']:
+            date_match = re.search(r'(20(?:2[6-9]|[3-9][0-9]))(\d{2})(\d{2})', name)
+            if date_match:
+                year, month, day = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
+                if 1 <= month <= 12 and 1 <= day <= 31:
                     info['date'] = f"{year:04d}{month:02d}{day:02d}"
 
         # 金額パターン: 末尾の数字

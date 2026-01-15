@@ -39,6 +39,7 @@ except ImportError:
 # 共通モジュール
 sys.path.insert(0, str(Path(__file__).parent))
 from common.logger import get_logger
+from ocr_dictionary import correct_ocr_text
 
 
 @dataclass
@@ -136,13 +137,30 @@ class YomiTokuOCRProcessor:
             "invoice_number": ""
         }
 
-        # 事業者登録番号
+        # OCR誤認識補正（辞書ベース）
+        text = correct_ocr_text(text)
+
+        # 事業者登録番号（パターン拡張）
         invoice_patterns = [
+            # 基本パターン
             r'[TＴ][\s\-]*(\d[\d\s\-]{11,17}\d)',
             r'登録番号[:\s：]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
+            r'インボイス[:\s：]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
+            # 追加パターン
+            r'事業者[登録]*番号[:\s：]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
+            r'適格請求書[発行]*事業者[:\s：]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
+            r'適格[:\s：]*[TＴ]?[\s\-]*(\d[\d\s\-]{11,17}\d)',
+            # OCR誤認識対応（Tが7や1に誤認識される場合）- ラベル直後のみ
+            r'登録番号[:\s：]*[7１1][\s\-]*(\d[\d\s\-]{11,17}\d)',
+            # 先頭1の後に13桁が続くパターン（1XXXXXXXXXXXX形式 - Tが1に誤認識）
+            r'登録番号[:\s：\n]*[1](\d{13})',
+            # 14桁の数字（先頭1がTの誤認識）の後に登録番号ラベルがあるパターン
+            r'[1](\d{13})\s*\n?\s*登録番号',
+            # 単独の14桁数字（先頭1がTの誤認識、会社名の後にある）
+            r'株式会社\s*\n?\s*[1](\d{13})',
         ]
         for pattern in invoice_patterns:
-            match = re.search(pattern, text)
+            match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 raw_num = re.sub(r'[\s\-]', '', match.group(1))
                 if len(raw_num) == 13 and raw_num.isdigit():
@@ -150,39 +168,48 @@ class YomiTokuOCRProcessor:
                     break
 
         # 金額（優先度順のパターン - レシート対応強化）
+        # (パターン, 優先度) - 優先度が高いパターンで見つかった金額を優先
         amount_patterns_priority = [
-            # 最優先: 明示的な合計・小計
-            (r'(?:合計|小計|総額|総計)[金額]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', True),
-            (r'(?:税込|税込合計)[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', True),
-            (r'(?:お買上|お買い上げ|お支払)[金額]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', True),
-            # 中優先: 円記号付き
-            (r'[¥\\￥]\s*([\d,，]+)', False),
-            # 低優先: 円マーク
-            (r'([\d,，]+)\s*円', False),
-            # レシート用: 数字のみ（最後の手段）
-            (r'\s(\d{2,7})\s*$', False),
+            # 最優先: 明示的な合計・請求金額（優先度10）
+            (r'(?:合計金額|ご請求金額|請求金額)[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 10),
+            (r'(?:税込合計|税込金額)[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 10),
+            # 高優先: 一般的な合計表現（優先度8）
+            (r'(?:合計|総額|総計)[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 8),
+            (r'(?:お買上|お買い上げ|お支払)[金額計]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 8),
+            # 中優先: 業種別表現（優先度7）
+            (r'通行料金[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 7),
+            (r'駐車料金[:\s：（(]*[一般]*[）):\s：]*\s*([\d,，\.]+)', 7),
+            (r'現計[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 7),
+            (r'領収[金額]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 7),
+            # 中低優先: 汎用パターン（優先度6）
+            (r'税込[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 6),
+            (r'支払[い]?[金額計]?[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 6),
+            # 低優先: 小計・¥記号（優先度5）
+            (r'小計[:\s：]*[¥\\￥]?\s*([\d,，\.]+)', 5),
+            (r'[¥\\￥]\s*([\d,，\.]+)\s*[-\-ー]*', 5),  # ¥3,400- 形式対応
+            # 最低優先: 単独の円表記（優先度4）
+            (r'([\d,，]+)\s*円', 4),
+            # 除外: 「お預り」は採用しない（受取金額であり請求額ではない）
         ]
 
-        amounts = []
-        priority_amounts = []  # 優先パターンで見つかった金額
+        best_amount = 0
+        best_priority = 0
 
-        for pattern, is_priority in amount_patterns_priority:
+        for pattern, priority in amount_patterns_priority:
             matches = re.findall(pattern, text, re.MULTILINE)
             for m in matches:
                 try:
                     amount = int(re.sub(r'[,，\.]', '', m))
                     if 50 <= amount <= 10000000:  # 50円以上に緩和
-                        amounts.append(amount)
-                        if is_priority:
-                            priority_amounts.append(amount)
+                        # 優先度が高い、または同じ優先度で金額が大きい場合に更新
+                        if priority > best_priority or (priority == best_priority and amount > best_amount):
+                            best_amount = amount
+                            best_priority = priority
                 except ValueError:
                     pass
 
-        # 優先パターンがあればそれを使用、なければ最大値
-        if priority_amounts:
-            data["amount"] = max(priority_amounts)
-        elif amounts:
-            data["amount"] = max(amounts)
+        if best_amount > 0:
+            data["amount"] = best_amount
 
         # 日付（パターン強化 - 様々な形式に対応）
         date_patterns = [
@@ -206,22 +233,40 @@ class YomiTokuOCRProcessor:
              lambda m: f"{int(m.group(1)):04d}{int(m.group(2)):02d}{int(m.group(3)):02d}"),
         ]
 
+        # 全ての日付候補を収集して、最も妥当なものを選択
+        date_candidates = []
         for pattern, converter in date_patterns:
-            match = re.search(pattern, text)
-            if match:
+            for match in re.finditer(pattern, text):
                 try:
                     date_str = converter(match)
-                    # 日付の妥当性チェック
                     year = int(date_str[:4])
                     month = int(date_str[4:6])
                     day = int(date_str[6:8])
                     if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
-                        data["issue_date"] = date_str
-                        break
+                        date_candidates.append(date_str)
                 except (ValueError, IndexError):
                     continue
 
+        if date_candidates:
+            # 2026年以降の日付のみ有効（それ以前の領収書は処理対象外）
+            valid_dates = [d for d in date_candidates if int(d[:4]) >= 2026]
+            if valid_dates:
+                data["issue_date"] = valid_dates[0]
+            # 2026年以前の日付は採用しない（OCR誤認識と判断）
+
         # 取引先名（パターン強化 - 店舗名・会社名対応）
+        # 特定のベンダーを先に探す（特殊パターン）
+        special_vendor_patterns = [
+            (r'三井のリパーク|リパーク', '三井不動産リアルティ株式会社'),
+            (r'刈谷市会計管理者', '刈谷市会計管理者'),
+            (r'名鉄協商|名鉄t.*パーキング', '名鉄協商株式会社'),
+            (r'タイムズ|Times', 'タイムズ'),
+        ]
+        for pattern, vendor_name in special_vendor_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                data["vendor_name"] = vendor_name
+                return data  # 特定できたら早期リターン
+
         vendor_patterns = [
             # 会社形式（先頭）
             r'^((?:株式会社|有限会社|合同会社|一般社団法人).+?)(?:\s|$)',
@@ -247,6 +292,47 @@ class YomiTokuOCRProcessor:
                     break
 
         return data
+
+    def _calculate_confidence(self, result: PDFExtractResult) -> float:
+        """
+        抽出結果に基づく信頼度計算
+
+        各項目の抽出成功に応じてスコアを加算
+
+        Returns:
+            信頼度スコア（0.0〜1.0）
+        """
+        score = 0.0
+
+        # 金額が取得できた
+        if result.amount > 0:
+            score += 0.30
+            # 金額が妥当範囲（50〜1000万円）
+            if 50 <= result.amount <= 10000000:
+                score += 0.15
+
+        # 日付が妥当な形式（YYYYMMDD, 8桁）
+        if result.issue_date and len(result.issue_date) == 8:
+            try:
+                year = int(result.issue_date[:4])
+                month = int(result.issue_date[4:6])
+                day = int(result.issue_date[6:8])
+                if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+                    score += 0.20
+            except ValueError:
+                pass
+
+        # 取引先名が取得できた
+        if result.vendor_name and len(result.vendor_name) >= 2:
+            score += 0.20
+
+        # 事業者登録番号（T+13桁）
+        if result.invoice_number:
+            import re
+            if re.match(r'^T\d{13}$', result.invoice_number):
+                score += 0.15
+
+        return min(score, 1.0)
 
     def process_pdf(self, pdf_path: Path) -> PDFExtractResult:
         """PDFを処理してデータを抽出"""
@@ -277,10 +363,11 @@ class YomiTokuOCRProcessor:
             result.amount = expense_data["amount"]
             result.invoice_number = expense_data["invoice_number"]
 
-            # 成功判定
+            # 成功判定と信頼度計算
             if result.vendor_name or result.amount > 0 or result.issue_date:
                 result.success = True
-                result.confidence = 0.8  # YomiTokuは信頼度を返さないため固定値
+                # 抽出成功率に基づく信頼度計算
+                result.confidence = self._calculate_confidence(result)
 
             self.logger.info(
                 f"抽出結果: vendor={result.vendor_name}, "

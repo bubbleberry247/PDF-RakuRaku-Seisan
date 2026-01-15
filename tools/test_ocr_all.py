@@ -38,6 +38,7 @@ def main():
 
     success = 0
     failed = 0
+    failed_files = []
 
     for filename, exp_vendor, exp_date, exp_amount, exp_invoice in EXPECTED:
         pdf_path = pdf_dir / filename
@@ -56,6 +57,7 @@ def main():
             success += 1
         else:
             failed += 1
+            failed_files.append(pdf_path)
 
         print(f"\n[{status}] {filename}")
         print(f"  取引先: {result.vendor_name}")
@@ -68,6 +70,12 @@ def main():
     print("\n" + "=" * 80)
     print(f"結果: {success}/{len(EXPECTED)} 成功, {failed} 失敗")
     print("=" * 80)
+
+    # 失敗したファイルのフルパスを表示
+    if failed_files:
+        print("\n失敗したファイル:")
+        for path in failed_files:
+            print(f"  {path}")
 
 if __name__ == "__main__":
     main()

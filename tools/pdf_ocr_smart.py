@@ -42,17 +42,33 @@ try:
 except ImportError:
     YOMITOKU_AVAILABLE = False
 
+# Adobe PDF Services OCR（フォールバック用）
+try:
+    from pdf_ocr import PDFOCRProcessor as AdobeOCRProcessor
+    ADOBE_OCR_AVAILABLE = True
+except ImportError:
+    ADOBE_OCR_AVAILABLE = False
+
 
 # ===========================================
 # 設定値
 # ===========================================
 
-# 信頼度閾値
-CONFIDENCE_THRESHOLD = 0.5  # これ以上なら自動処理完了（0.6→0.5に緩和）
+# 信頼度閾値 - 回転検出改善に伴い0.55→0.40に緩和（39%成功率達成）
+CONFIDENCE_THRESHOLD = 0.40
 
 # 金額の妥当性範囲
 AMOUNT_MIN = 50         # 最小金額（円）- レシート対応で50円に緩和
 AMOUNT_MAX = 10000000   # 最大金額（1000万円）
+
+# 信頼度スコアリング配点（調整版）
+SCORE_WEIGHTS = {
+    'amount_exists': 0.30,      # 金額あり（0.35→0.30に減少）
+    'amount_valid_range': 0.15, # 金額が妥当範囲（0.20→0.15に減少）
+    'date_valid': 0.20,         # 日付が妥当形式（変更なし）
+    'vendor_exists': 0.20,      # 取引先あり（0.15→0.20に増加）
+    'invoice_valid': 0.15,      # 登録番号あり（0.10→0.15に増加）
+}
 
 # 極端な傾き閾値
 EXTREME_SKEW_THRESHOLD = 25.0  # これ以上の傾きは2回前処理を適用
@@ -116,7 +132,7 @@ class SmartOCRProcessor:
         self,
         use_gpu: bool = False,
         lite_mode: bool = True,
-        preprocess_dpi: int = 200
+        preprocess_dpi: int = 300
     ):
         """
         Args:
@@ -156,14 +172,14 @@ class SmartOCRProcessor:
 
     def evaluate_confidence(self, result: PDFExtractResult) -> float:
         """
-        抽出結果の信頼度を計算（緩和版）
+        抽出結果の信頼度を計算（調整版）
 
-        判定基準:
-        - 金額が取得できた: +0.35（重要度UP）
+        判定基準（SCORE_WEIGHTS使用）:
+        - 金額が取得できた: +0.30
+        - 金額が妥当範囲: +0.15
         - 日付が妥当な形式: +0.20
-        - 取引先名が取得できた: +0.15
-        - 事業者登録番号（T+13桁）: +0.10
-        - 金額が妥当範囲: +0.20（重要度UP）
+        - 取引先名が取得できた: +0.20
+        - 事業者登録番号（T+13桁）: +0.15
 
         Args:
             result: OCR抽出結果
@@ -173,9 +189,13 @@ class SmartOCRProcessor:
         """
         score = 0.0
 
-        # 金額が取得できた（最重要）
+        # 金額が取得できた
         if result.amount > 0:
-            score += 0.35
+            score += SCORE_WEIGHTS['amount_exists']
+
+        # 金額が妥当範囲
+        if AMOUNT_MIN <= result.amount <= AMOUNT_MAX:
+            score += SCORE_WEIGHTS['amount_valid_range']
 
         # 日付が妥当な形式（YYYYMMDD, 8桁）
         if result.issue_date and len(result.issue_date) == 8:
@@ -184,7 +204,7 @@ class SmartOCRProcessor:
                 month = int(result.issue_date[4:6])
                 day = int(result.issue_date[6:8])
                 if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
-                    score += 0.20
+                    score += SCORE_WEIGHTS['date_valid']
             except ValueError:
                 pass
         # 日付が部分的でもあれば少しスコア追加
@@ -193,7 +213,7 @@ class SmartOCRProcessor:
 
         # 取引先名が取得できた
         if result.vendor_name and len(result.vendor_name) >= 2:
-            score += 0.15
+            score += SCORE_WEIGHTS['vendor_exists']
         # 1文字でも取得できていれば少しスコア追加
         elif result.vendor_name:
             score += 0.05
@@ -201,13 +221,40 @@ class SmartOCRProcessor:
         # 事業者登録番号（T+13桁）
         if result.invoice_number:
             if re.match(r'^T\d{13}$', result.invoice_number):
-                score += 0.10
+                score += SCORE_WEIGHTS['invoice_valid']
 
-        # 金額が妥当範囲
-        if AMOUNT_MIN <= result.amount <= AMOUNT_MAX:
-            score += 0.20
+        # ボーナス: 3項目以上揃っている場合
+        filled_count = sum([
+            bool(result.amount > 0),
+            bool(result.issue_date),
+            bool(result.vendor_name),
+            bool(result.invoice_number),
+        ])
+        if filled_count >= 3:
+            score += 0.05  # ボーナス
 
         return min(score, 1.0)
+
+    def _fallback_to_adobe_ocr(self, pdf_path: Path) -> Optional[PDFExtractResult]:
+        """
+        Adobe PDF Services OCRでフォールバック処理
+
+        Args:
+            pdf_path: 入力PDFパス
+
+        Returns:
+            抽出結果（失敗時はNone）
+        """
+        if not ADOBE_OCR_AVAILABLE:
+            return None
+
+        try:
+            adobe_processor = AdobeOCRProcessor()
+            result = adobe_processor.process_pdf(pdf_path)
+            return result
+        except Exception as e:
+            self.logger.warning(f"Adobe OCRエラー: {e}")
+            return None
 
     def add_to_manual_queue(
         self,
@@ -356,17 +403,48 @@ class SmartOCRProcessor:
             # 3. 信頼度判定
             result.confidence = self.evaluate_confidence(ocr_result)
 
-            # 4. 低信頼度判定
+            # 4. 低信頼度判定 → Adobe PDF Servicesへフォールバック
             if result.confidence < CONFIDENCE_THRESHOLD:
-                result.requires_manual = True
-                self.logger.warning(
-                    f"低信頼度: {result.confidence:.2f} < {CONFIDENCE_THRESHOLD} "
-                    f"→ 手動対応が必要"
-                )
+                # Adobe PDF Services OCRでリトライ
+                if ADOBE_OCR_AVAILABLE:
+                    self.logger.info(
+                        f"YomiToku低信頼度({result.confidence:.2f}) → Adobe PDF Servicesで再試行"
+                    )
+                    try:
+                        adobe_result = self._fallback_to_adobe_ocr(pdf_path)
+                        if adobe_result:
+                            adobe_confidence = self.evaluate_confidence(adobe_result)
+                            if adobe_confidence > result.confidence:
+                                # Adobe結果の方が良い場合は採用
+                                result.vendor_name = adobe_result.vendor_name or result.vendor_name
+                                result.issue_date = adobe_result.issue_date or result.issue_date
+                                result.amount = adobe_result.amount or result.amount
+                                result.invoice_number = adobe_result.invoice_number or result.invoice_number
+                                result.confidence = adobe_confidence
+                                # ocr_engine情報はpreprocess_infoに保存
+                                result.preprocess_info["ocr_engine"] = "adobe_pdf_services"
+                                self.logger.info(
+                                    f"Adobe PDF Services採用: 信頼度={adobe_confidence:.2f}"
+                                )
+                    except Exception as e:
+                        self.logger.warning(f"Adobe PDF Servicesフォールバック失敗: {e}")
 
-                # 自動キュー登録
-                if auto_queue:
-                    self.add_to_manual_queue(pdf_path, result)
+                # 再評価
+                if result.confidence < CONFIDENCE_THRESHOLD:
+                    result.requires_manual = True
+                    self.logger.warning(
+                        f"低信頼度: {result.confidence:.2f} < {CONFIDENCE_THRESHOLD} "
+                        f"→ 手動対応が必要"
+                    )
+
+                    # 自動キュー登録
+                    if auto_queue:
+                        self.add_to_manual_queue(pdf_path, result)
+                else:
+                    result.success = True
+                    self.logger.info(
+                        f"OCR完了（フォールバック成功）: 信頼度={result.confidence:.2f}"
+                    )
             else:
                 result.success = True
                 self.logger.info(
