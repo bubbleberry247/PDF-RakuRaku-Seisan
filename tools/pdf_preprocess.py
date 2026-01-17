@@ -52,16 +52,16 @@ class PreprocessResult:
 # 傾き補正閾値（度）
 SKEW_THRESHOLD_DEFAULT = 0.5
 
-# アップスケール設定
-UPSCALE_MIN_WIDTH = 1000   # この幅以下ならアップスケール
-UPSCALE_MIN_HEIGHT = 1000  # この高さ以下ならアップスケール
-UPSCALE_FACTOR = 2.0       # アップスケール倍率
+# アップスケール設定（強化版）
+UPSCALE_MIN_WIDTH = 1200   # この幅以下ならアップスケール（1000→1200）
+UPSCALE_MIN_HEIGHT = 1200  # この高さ以下ならアップスケール（1000→1200）
+UPSCALE_FACTOR = 2.5       # アップスケール倍率（2.0→2.5）
 
 
 class PDFPreprocessor:
     """PDF前処理クラス"""
 
-    def __init__(self, dpi: int = 200):
+    def __init__(self, dpi: int = 300):
         """
         Args:
             dpi: 画像変換時の解像度
@@ -130,7 +130,8 @@ class PDFPreprocessor:
             self.logger.info(f"横長ページ検出 ({width:.0f}x{height:.0f}) → {rotation_angle}度回転")
         elif force_4way:
             # 縦長でも4方向検出を実行（180度反転チェック含む）
-            rotation_angle = detector.detect_best_rotation(pdf_path, use_enhanced=True)
+            # Tesseract OSD + スコアベースの組み合わせ検出を使用（39%成功率達成）
+            rotation_angle = detector.detect_best_rotation_combined(pdf_path)
             if rotation_angle != 0:
                 needs_rotation = True
                 self.logger.info(f"4方向検出: {rotation_angle}度回転が必要")
@@ -329,12 +330,73 @@ class PDFPreprocessor:
 
         return rotated
 
+    def estimate_noise_level(self, img: np.ndarray) -> float:
+        """
+        画像のノイズレベルを推定
+
+        Laplacian分散でノイズを推定
+
+        Returns:
+            ノイズレベル（値が大きいほどノイズが多い）
+        """
+        # グレースケール
+        if len(img.shape) == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img.copy()
+
+        # Laplacian分散でノイズ推定
+        laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+        noise_level = laplacian.var()
+
+        return noise_level
+
+    def denoise_image(self, img: np.ndarray, level: str = 'auto') -> np.ndarray:
+        """
+        多段階ノイズ除去
+
+        Args:
+            img: 入力画像
+            level: 'light' / 'medium' / 'heavy' / 'auto'
+
+        Returns:
+            ノイズ除去後の画像
+        """
+        # 自動判定
+        if level == 'auto':
+            noise = self.estimate_noise_level(img)
+            if noise < 500:
+                level = 'light'
+            elif noise < 1500:
+                level = 'medium'
+            else:
+                level = 'heavy'
+            self.logger.debug(f"ノイズレベル自動判定: {noise:.1f} → {level}")
+
+        # グレースケール変換
+        if len(img.shape) == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img.copy()
+
+        if level == 'light':
+            denoised = cv2.fastNlMeansDenoising(gray, h=5)
+        elif level == 'medium':
+            denoised = cv2.fastNlMeansDenoising(gray, h=10)
+        else:
+            # 金券レシート等のノイズが多い画像用
+            denoised = cv2.fastNlMeansDenoising(gray, h=15)
+            denoised = cv2.bilateralFilter(denoised, 9, 75, 75)
+
+        # RGBに戻す
+        return cv2.cvtColor(denoised, cv2.COLOR_GRAY2RGB)
+
     def enhance_image(self, img: np.ndarray) -> np.ndarray:
         """
         OCR向けの画像強調
 
         - コントラスト強調
-        - ノイズ除去
+        - ノイズ除去（多段階）
         """
         # グレースケール変換
         if len(img.shape) == 3:
@@ -346,13 +408,11 @@ class PDFPreprocessor:
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(gray)
 
-        # 軽いノイズ除去
-        denoised = cv2.fastNlMeansDenoising(enhanced, h=10)
+        # ノイズ除去（自動判定）
+        enhanced_rgb = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2RGB)
+        denoised = self.denoise_image(enhanced_rgb, level='auto')
 
-        # RGBに戻す
-        result = cv2.cvtColor(denoised, cv2.COLOR_GRAY2RGB)
-
-        return result
+        return denoised
 
     def upscale_image(self, img: np.ndarray) -> np.ndarray:
         """
@@ -592,7 +652,7 @@ def test_preprocess():
     output_dir = Path(r"C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\data\preprocess_test")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    preprocessor = PDFPreprocessor(dpi=200)
+    preprocessor = PDFPreprocessor(dpi=300)
 
     # テスト対象
     test_files = [

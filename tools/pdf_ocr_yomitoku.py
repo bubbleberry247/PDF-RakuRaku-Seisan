@@ -49,6 +49,8 @@ class PDFExtractResult:
     issue_date: str = ""  # YYYYMMDD
     amount: int = 0
     invoice_number: str = ""
+    document_type: str = "領収書"  # "領収書" or "請求書"
+    description: str = ""  # 但し書き
     raw_text: str = ""
     confidence: float = 0.0
     success: bool = False
@@ -134,7 +136,9 @@ class YomiTokuOCRProcessor:
             "vendor_name": "",
             "issue_date": "",
             "amount": 0,
-            "invoice_number": ""
+            "invoice_number": "",
+            "document_type": "領収書",  # デフォルト
+            "description": ""  # 但し書き
         }
 
         # OCR誤認識補正（辞書ベース）
@@ -291,6 +295,44 @@ class YomiTokuOCRProcessor:
                     data["vendor_name"] = vendor
                     break
 
+        # 領収書区分（「請求書」キーワードがあれば請求書、なければ領収書）
+        invoice_keywords = [
+            r'請\s*求\s*書',
+            r'御\s*請\s*求',
+            r'ご\s*請\s*求',
+            r'INVOICE',
+        ]
+        for pattern in invoice_keywords:
+            if re.search(pattern, text, re.IGNORECASE):
+                data["document_type"] = "請求書"
+                break
+        # 「領収書」「領収証」があれば明示的に領収書
+        receipt_keywords = [r'領\s*収\s*書', r'領\s*収\s*証', r'レシート', r'RECEIPT']
+        for pattern in receipt_keywords:
+            if re.search(pattern, text, re.IGNORECASE):
+                data["document_type"] = "領収書"
+                break
+
+        # 但し書き（「但」「品名」「摘要」などの後ろのテキストを抽出）
+        description_patterns = [
+            r'但[し]?[:\s：、]*(.+?)(?:\s*として|として|$)',
+            r'但[し]?書[き]?[:\s：]*(.+?)(?:\s|$)',
+            r'品\s*名[:\s：]*(.+?)(?:\s|$)',
+            r'摘\s*要[:\s：]*(.+?)(?:\s|$)',
+            r'内\s*容[:\s：]*(.+?)(?:\s|$)',
+            r'(?:上記|上記の?金額)[^。]*(?:として|を)[:\s：]*(.+?)(?:代|費|料|として)',
+        ]
+        for pattern in description_patterns:
+            match = re.search(pattern, text)
+            if match:
+                desc = match.group(1).strip()
+                # ノイズ除去
+                desc = re.sub(r'[\r\n\t]', '', desc)
+                desc = desc[:100]  # 100文字まで
+                if len(desc) >= 2:
+                    data["description"] = desc
+                    break
+
         return data
 
     def _calculate_confidence(self, result: PDFExtractResult) -> float:
@@ -362,6 +404,8 @@ class YomiTokuOCRProcessor:
             result.issue_date = expense_data["issue_date"]
             result.amount = expense_data["amount"]
             result.invoice_number = expense_data["invoice_number"]
+            result.document_type = expense_data["document_type"]
+            result.description = expense_data["description"]
 
             # 成功判定と信頼度計算
             if result.vendor_name or result.amount > 0 or result.issue_date:

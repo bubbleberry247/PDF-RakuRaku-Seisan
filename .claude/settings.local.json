@@ -22,7 +22,8 @@
       "Bash(timeout:*)",
       "Bash(chcp 65001)",
       "Bash(ls:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(git diff:*)"
     ],
     "additionalDirectories": [
       "c:\\ProgramData\\RK10\\Robots\\44PDF一般経費楽楽精算申請\\docs"

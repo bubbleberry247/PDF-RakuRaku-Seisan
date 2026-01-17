@@ -10,7 +10,7 @@ PDF回転方向検出モジュール（強化版）
   - 行連続性分析（水平プロジェクション）
   - Hough変換による線分検出
 
-Updated: 2026-01-14 - Document AI廃止対応
+Updated: 2026-01-15
 """
 import sys
 from pathlib import Path
@@ -26,12 +26,19 @@ from PIL import Image
 
 from common.logger import get_logger
 
+# Tesseract OSD用
+try:
+    import pytesseract
+    TESSERACT_AVAILABLE = True
+except ImportError:
+    TESSERACT_AVAILABLE = False
+
 
 class PDFRotationDetector:
     """PDF回転方向検出クラス（強化版）"""
 
-    # 回転スコアの最小差分（これ以下は回転しない）
-    ROTATION_MIN_DIFF = 0.1
+    # 回転スコアの最小差分（これ以下は回転しない）- 0.1→0.05に緩和（39%成功率達成）
+    ROTATION_MIN_DIFF = 0.05
 
     def __init__(self, dpi: int = 150):
         self.dpi = dpi
@@ -260,6 +267,105 @@ class PDFRotationDetector:
         )
 
         return best_angle
+
+    def detect_with_tesseract_osd(self, img: np.ndarray) -> Tuple[int, float]:
+        """
+        Tesseract OSD（Orientation and Script Detection）による回転検出
+
+        Args:
+            img: 入力画像（RGB or グレースケール）
+
+        Returns:
+            (回転角度, 信頼度) - 検出失敗時は(0, 0.0)
+        """
+        if not TESSERACT_AVAILABLE:
+            self.logger.debug("Tesseractが利用不可のためOSDスキップ")
+            return 0, 0.0
+
+        try:
+            # グレースケールに変換
+            if len(img.shape) == 3:
+                gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            else:
+                gray = img.copy()
+
+            # OSD実行
+            osd = pytesseract.image_to_osd(gray, output_type=pytesseract.Output.DICT)
+            rotate = osd.get('rotate', 0)
+            confidence = osd.get('orientation_conf', 0.0)
+
+            self.logger.debug(f"Tesseract OSD: 回転={rotate}度, 信頼度={confidence}")
+            return rotate, confidence
+
+        except pytesseract.TesseractError as e:
+            self.logger.debug(f"Tesseract OSDエラー: {e}")
+            return 0, 0.0
+        except Exception as e:
+            self.logger.debug(f"Tesseract OSD予期せぬエラー: {e}")
+            return 0, 0.0
+
+    def detect_best_rotation_combined(self, pdf_path: Path) -> int:
+        """
+        複数手法を組み合わせた回転検出（推奨）
+
+        1. Tesseract OSD
+        2. スコアベース検出（強化版）
+        3. 両者の結果を総合判定
+
+        Args:
+            pdf_path: 入力PDF
+
+        Returns:
+            最適な回転角度（0, 90, 180, 270）
+        """
+        img = self.pdf_to_image(pdf_path)
+
+        # 1. Tesseract OSD
+        osd_angle, osd_conf = self.detect_with_tesseract_osd(img)
+        self.logger.info(f"Tesseract OSD結果: {osd_angle}度 (信頼度: {osd_conf:.1f})")
+
+        # 2. スコアベース検出
+        rotations = [0, 90, 180, 270]
+        scores = []
+
+        for angle in rotations:
+            if angle == 0:
+                rotated = img
+            else:
+                rotated = self.rotate_image(img, angle)
+
+            score_dict = self.detect_text_score_enhanced(rotated)
+            scores.append(score_dict['total'])
+
+        score_best_idx = np.argmax(scores)
+        score_best_angle = rotations[score_best_idx]
+        self.logger.info(
+            f"スコアベース結果: {score_best_angle}度 "
+            f"(scores: 0°={scores[0]:.2f}, 90°={scores[1]:.2f}, "
+            f"180°={scores[2]:.2f}, 270°={scores[3]:.2f})"
+        )
+
+        # 3. 総合判定
+        # OSD信頼度が高い（>=5.0）場合はOSDを優先
+        if osd_conf >= 5.0 and osd_angle in rotations:
+            self.logger.info(f"総合判定: Tesseract OSD採用 → {osd_angle}度")
+            return osd_angle
+
+        # OSDとスコアベースが一致する場合は確定
+        if osd_angle == score_best_angle:
+            self.logger.info(f"総合判定: 両手法一致 → {score_best_angle}度")
+            return score_best_angle
+
+        # スコア差が十分にある場合はスコアベースを採用
+        max_score = max(scores)
+        current_score = scores[0]
+        if max_score - current_score >= self.ROTATION_MIN_DIFF:
+            self.logger.info(f"総合判定: スコアベース採用 → {score_best_angle}度")
+            return score_best_angle
+
+        # 差が小さい場合は回転なし
+        self.logger.info(f"総合判定: スコア差小のため回転なし → 0度")
+        return 0
 
     def detect_best_rotation_with_details(self, pdf_path: Path) -> Tuple[int, Dict]:
         """

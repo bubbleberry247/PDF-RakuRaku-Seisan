@@ -1,15 +1,23 @@
 # ログファイル
 log/
+logs/
 *.log
 
 # 一時ファイル
 work/
 backup/
 tmpclaude-*
+nul
 
 # Python キャッシュ
 __pycache__/
 *.pyc
 
-# データファイル（必要に応じてコメントアウト）
-# data/
+# IDE設定
+*.code-workspace
+
+# ローカル設定（機密含む可能性）
+config/*_LOCAL.xlsx
+
+# テストデータ（PDF、機密含む可能性）
+data/MOCK_FAX/

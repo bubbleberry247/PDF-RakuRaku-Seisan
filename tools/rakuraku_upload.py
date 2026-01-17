@@ -311,11 +311,12 @@ class RakurakuUploader:
         except Exception as e:
             self.logger.warning(f"{prefix}日入力失敗: {e}")
 
-    def submit(self, dry_run: bool = False) -> bool:
+    def submit(self, dry_run: bool = False, pause_before_submit: bool = False) -> bool:
         """確定ボタンをクリック
 
         Args:
             dry_run: Trueの場合は確定しない
+            pause_before_submit: Trueの場合、確定前に一時停止
 
         Returns:
             成功/失敗
@@ -325,29 +326,59 @@ class RakurakuUploader:
                 self.logger.info("ドライラン: 確定をスキップ")
                 return True
 
+            if pause_before_submit:
+                self.logger.info("=" * 50)
+                self.logger.info("確定ボタンを押す前で停止しています")
+                self.logger.info("ブラウザで内容を確認してください")
+                self.logger.info("30秒後に自動で確定します...")
+                self.logger.info("=" * 50)
+                time.sleep(30)
+
             try:
-                # 確定ボタンをクリック
-                confirm_btn = self.page.locator("button.kakuteiEbook, button:has-text('確定')").first
+                # 確定ボタンをクリック（classにkakuteiを含むボタン）
+                confirm_btn = self.page.locator("button.accesskeyOk, button:has-text('確定')").first
                 if confirm_btn.count() > 0:
+                    confirm_btn.scroll_into_view_if_needed()
+                    time.sleep(1)
                     confirm_btn.click()
                     self.logger.info("確定ボタンクリック")
                 else:
                     self.logger.warning("確定ボタンが見つかりません")
                     return False
 
-                # 確認ダイアログ対応（事業者登録番号未入力時）
-                time.sleep(2)
+                # 確認ダイアログ対応（事業者登録番号未入力時など）
+                time.sleep(3)
+
+                # デバッグ: 確定後のスクリーンショット
                 try:
-                    ok_btn = self.page.locator("button:has-text('OK'), button:has-text('はい')").first
-                    if ok_btn.count() > 0:
-                        ok_btn.click()
-                        self.logger.info("確認ダイアログOK")
-                except Exception:
+                    self.page.screenshot(path="C:/ProgramData/RK10/Robots/44PDF一般経費楽楽精算申請/docs/screenshots/after_confirm.png")
+                    self.logger.info("確定後スクリーンショット保存")
+                except:
                     pass
 
+                # ダイアログのOKボタンを探してクリック（事業者登録番号未入力時など）
+                dialog_clicked = False
+                for attempt in range(10):
+                    try:
+                        # get_by_roleでOKボタンを探す
+                        ok_btn = self.page.get_by_role("button", name="OK")
+                        if ok_btn.count() > 0 and ok_btn.is_visible():
+                            ok_btn.click()
+                            self.logger.info("ダイアログOKクリック成功")
+                            dialog_clicked = True
+                            time.sleep(2)
+                            break
+                        time.sleep(1)
+                    except Exception as e:
+                        self.logger.debug(f"ダイアログ対応試行{attempt+1}: {e}")
+                        time.sleep(1)
+
+                if not dialog_clicked:
+                    self.logger.info("ダイアログなし、または既に閉じている")
+
                 # 処理完了待機
-                self.logger.info("処理待機中（最大90秒）...")
-                time.sleep(90)
+                self.logger.info("処理待機中（最大30秒）...")
+                time.sleep(30)
 
                 return True
 

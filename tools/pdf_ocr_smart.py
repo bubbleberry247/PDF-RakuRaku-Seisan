@@ -82,6 +82,148 @@ MANUAL_QUEUE_DIR = Path(r"C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精�
 
 
 @dataclass
+class QualityGateResult:
+    """品質ゲート判定結果"""
+    passed: bool = False
+    issues: List[str] = field(default_factory=list)
+
+    # 各項目の妥当性
+    document_type_valid: bool = False
+    date_valid: bool = False
+    invoice_number_valid: bool = False
+    vendor_valid: bool = False
+    amount_valid: bool = False
+
+    def to_dict(self) -> dict:
+        return {
+            "passed": self.passed,
+            "issues": self.issues,
+            "document_type_valid": self.document_type_valid,
+            "date_valid": self.date_valid,
+            "invoice_number_valid": self.invoice_number_valid,
+            "vendor_valid": self.vendor_valid,
+            "amount_valid": self.amount_valid
+        }
+
+
+def check_quality_gate(
+    vendor_name: str,
+    issue_date: str,
+    amount: int,
+    invoice_number: str,
+    document_type: str
+) -> QualityGateResult:
+    """
+    必須項目の品質ゲートチェック
+
+    必須項目（全てパスしないと自動OKにならない）:
+    - 書類区分: 領収書 or 請求書
+    - 取引日: YYYYMMDD形式、2026年以降
+    - 事業者登録番号: T + 13桁
+    - 取引先名: 2文字以上
+    - 金額: 50円以上
+
+    任意項目（チェック対象外）:
+    - 備考（但し書き）
+
+    Returns:
+        QualityGateResult
+    """
+    result = QualityGateResult()
+
+    # 1. 書類区分: 領収書 or 請求書
+    if document_type in ["領収書", "請求書"]:
+        result.document_type_valid = True
+    else:
+        result.issues.append(f"書類区分未確定（値: {document_type}）")
+
+    # 2. 取引日: YYYYMMDD形式、2026年以降
+    if issue_date and re.match(r'^20\d{6}$', issue_date):
+        try:
+            year = int(issue_date[:4])
+            month = int(issue_date[4:6])
+            day = int(issue_date[6:8])
+            if year >= 2026 and 1 <= month <= 12 and 1 <= day <= 31:
+                result.date_valid = True
+            else:
+                result.issues.append(f"取引日が範囲外（値: {issue_date}、2026年以降のみ対応）")
+        except ValueError:
+            result.issues.append(f"取引日が不正形式（値: {issue_date}）")
+    else:
+        result.issues.append(f"取引日未抽出（値: {issue_date or '(空)'}）")
+
+    # 3. 事業者登録番号: T + 13桁
+    if invoice_number and re.match(r'^T\d{13}$', invoice_number):
+        result.invoice_number_valid = True
+    else:
+        result.issues.append(f"事業者登録番号未抽出または不正形式（値: {invoice_number or '(空)'}）")
+
+    # 4. 取引先名: 2文字以上
+    if vendor_name and len(vendor_name) >= 2:
+        result.vendor_valid = True
+    else:
+        result.issues.append(f"取引先名未抽出または短すぎ（値: {vendor_name or '(空)'}）")
+
+    # 5. 金額: 50円以上
+    if amount >= AMOUNT_MIN:
+        result.amount_valid = True
+    else:
+        result.issues.append(f"金額未抽出または範囲外（値: {amount}円、{AMOUNT_MIN}円以上必要）")
+
+    # 全項目パスで合格
+    result.passed = all([
+        result.document_type_valid,
+        result.date_valid,
+        result.invoice_number_valid,
+        result.vendor_valid,
+        result.amount_valid
+    ])
+
+    return result
+
+
+def generate_final_json(
+    document_id: str,
+    document_type: str,
+    issue_date: str,
+    invoice_number: str,
+    vendor_name: str,
+    amount: int,
+    remarks: str = ""
+) -> dict:
+    """
+    楽楽精算登録用のfinal.json形式を生成
+
+    Args:
+        document_id: ドキュメントID（例: DOC-20260115-000123）
+        document_type: 書類区分（領収書 or 請求書）
+        issue_date: 取引日（YYYYMMDD形式）
+        invoice_number: 事業者登録番号（T+13桁）
+        vendor_name: 取引先名
+        amount: 金額
+        remarks: 備考（但し書き）
+
+    Returns:
+        final.json形式の辞書
+    """
+    # 日付を年・月・日に分解
+    year = int(issue_date[:4]) if issue_date and len(issue_date) >= 4 else 0
+    month = int(issue_date[4:6]) if issue_date and len(issue_date) >= 6 else 0
+    day = int(issue_date[6:8]) if issue_date and len(issue_date) >= 8 else 0
+
+    return {
+        "document_id": document_id,
+        "document_type": document_type,
+        "transaction_date": {"year": year, "month": month, "day": day},
+        "receipt_date": {"year": year, "month": month, "day": day},  # 受領日=取引日
+        "invoice_number": invoice_number,
+        "vendor_name": vendor_name,
+        "amount": amount,
+        "remarks": remarks
+    }
+
+
+@dataclass
 class SmartOCRResult:
     """スマートOCR処理結果"""
     # 抽出データ
@@ -89,12 +231,17 @@ class SmartOCRResult:
     issue_date: str = ""  # YYYYMMDD
     amount: int = 0
     invoice_number: str = ""  # 事業者登録番号（T+13桁）
+    document_type: str = "領収書"  # "領収書" or "請求書"
+    description: str = ""  # 但し書き
     raw_text: str = ""
 
     # 処理情報
     confidence: float = 0.0
     requires_manual: bool = False
     preprocess_info: Dict = field(default_factory=dict)
+
+    # 品質ゲート結果
+    quality_gate: Optional[QualityGateResult] = None
 
     # ステータス
     success: bool = False
@@ -107,11 +254,26 @@ class SmartOCRResult:
             "issue_date": self.issue_date,
             "amount": self.amount,
             "invoice_number": self.invoice_number,
+            "document_type": self.document_type,
+            "description": self.description,
             "confidence": self.confidence,
             "requires_manual": self.requires_manual,
+            "quality_gate": self.quality_gate.to_dict() if self.quality_gate else None,
             "success": self.success,
             "error": self.error
         }
+
+    def to_final_json(self, document_id: str) -> dict:
+        """楽楽精算登録用のfinal.json形式に変換"""
+        return generate_final_json(
+            document_id=document_id,
+            document_type=self.document_type,
+            issue_date=self.issue_date,
+            invoice_number=self.invoice_number,
+            vendor_name=self.vendor_name,
+            amount=self.amount,
+            remarks=self.description
+        )
 
 
 class SmartOCRProcessor:
@@ -398,6 +560,8 @@ class SmartOCRProcessor:
             result.issue_date = ocr_result.issue_date
             result.amount = ocr_result.amount
             result.invoice_number = ocr_result.invoice_number
+            result.document_type = ocr_result.document_type
+            result.description = ocr_result.description
             result.raw_text = ocr_result.raw_text
 
             # 3. 信頼度判定
@@ -420,6 +584,8 @@ class SmartOCRProcessor:
                                 result.issue_date = adobe_result.issue_date or result.issue_date
                                 result.amount = adobe_result.amount or result.amount
                                 result.invoice_number = adobe_result.invoice_number or result.invoice_number
+                                result.document_type = adobe_result.document_type or result.document_type
+                                result.description = adobe_result.description or result.description
                                 result.confidence = adobe_confidence
                                 # ocr_engine情報はpreprocess_infoに保存
                                 result.preprocess_info["ocr_engine"] = "adobe_pdf_services"
@@ -429,23 +595,20 @@ class SmartOCRProcessor:
                     except Exception as e:
                         self.logger.warning(f"Adobe PDF Servicesフォールバック失敗: {e}")
 
-                # 再評価
-                if result.confidence < CONFIDENCE_THRESHOLD:
-                    result.requires_manual = True
-                    self.logger.warning(
-                        f"低信頼度: {result.confidence:.2f} < {CONFIDENCE_THRESHOLD} "
-                        f"→ 手動対応が必要"
-                    )
+                # 再評価（信頼度チェック後に品質ゲートへ）
+                pass  # 品質ゲートは下で統一評価
 
-                    # 自動キュー登録
-                    if auto_queue:
-                        self.add_to_manual_queue(pdf_path, result)
-                else:
-                    result.success = True
-                    self.logger.info(
-                        f"OCR完了（フォールバック成功）: 信頼度={result.confidence:.2f}"
-                    )
-            else:
+            # 5. 品質ゲート判定（必須項目の存在+形式妥当性チェック）
+            result.quality_gate = check_quality_gate(
+                vendor_name=result.vendor_name,
+                issue_date=result.issue_date,
+                amount=result.amount,
+                invoice_number=result.invoice_number,
+                document_type=result.document_type
+            )
+
+            # 6. 成功判定: 品質ゲートパス AND 信頼度閾値以上
+            if result.quality_gate.passed and result.confidence >= CONFIDENCE_THRESHOLD:
                 result.success = True
                 self.logger.info(
                     f"OCR完了: 信頼度={result.confidence:.2f}, "
@@ -453,6 +616,20 @@ class SmartOCRProcessor:
                     f"date={result.issue_date}, "
                     f"amount={result.amount}"
                 )
+            else:
+                result.requires_manual = True
+                # 失敗理由を詳細にログ出力
+                reasons = []
+                if not result.quality_gate.passed:
+                    reasons.append(f"品質ゲート失敗: {', '.join(result.quality_gate.issues)}")
+                if result.confidence < CONFIDENCE_THRESHOLD:
+                    reasons.append(f"信頼度不足: {result.confidence:.2f} < {CONFIDENCE_THRESHOLD}")
+                self.logger.warning(f"手動対応が必要 → {'; '.join(reasons)}")
+
+                # 自動キュー登録
+                if auto_queue:
+                    reason = "quality_gate_failed" if not result.quality_gate.passed else "low_confidence"
+                    self.add_to_manual_queue(pdf_path, result, reason=reason)
 
         except Exception as e:
             result.error = str(e)

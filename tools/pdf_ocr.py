@@ -47,6 +47,8 @@ class PDFExtractResult:
     issue_date: str = ""  # YYYYMMDD
     amount: int = 0
     invoice_number: str = ""  # 事業者登録番号
+    document_type: str = "領収書"  # "領収書" or "請求書"
+    description: str = ""  # 但し書き
     raw_text: str = ""  # 抽出した生テキスト
     success: bool = False
     error: str = ""
@@ -587,6 +589,45 @@ class PDFOCRProcessor:
             for pattern, vendor_name in special_vendors:
                 if re.search(pattern, text, re.IGNORECASE):
                     result.vendor_name = vendor_name
+                    break
+
+        # --- 領収書区分を判定 ---
+        # 「請求書」キーワードがあれば請求書、なければ領収書（デフォルト）
+        invoice_keywords = [
+            r'請\s*求\s*書',
+            r'御\s*請\s*求',
+            r'ご\s*請\s*求',
+            r'INVOICE',
+        ]
+        for pattern in invoice_keywords:
+            if re.search(pattern, text, re.IGNORECASE):
+                result.document_type = "請求書"
+                break
+        # 「領収書」「領収証」があれば明示的に領収書
+        receipt_keywords = [r'領\s*収\s*書', r'領\s*収\s*証', r'レシート', r'RECEIPT']
+        for pattern in receipt_keywords:
+            if re.search(pattern, text, re.IGNORECASE):
+                result.document_type = "領収書"
+                break
+
+        # --- 但し書きを抽出 ---
+        description_patterns = [
+            r'但[し]?[:\s：、]*(.+?)(?:\s*として|として|$)',
+            r'但[し]?書[き]?[:\s：]*(.+?)(?:\s|$)',
+            r'品\s*名[:\s：]*(.+?)(?:\s|$)',
+            r'摘\s*要[:\s：]*(.+?)(?:\s|$)',
+            r'内\s*容[:\s：]*(.+?)(?:\s|$)',
+            r'(?:上記|上記の?金額)[^。]*(?:として|を)[:\s：]*(.+?)(?:代|費|料|として)',
+        ]
+        for pattern in description_patterns:
+            match = re.search(pattern, text)
+            if match:
+                desc = match.group(1).strip()
+                # ノイズ除去
+                desc = re.sub(r'[\r\n\t]', '', desc)
+                desc = desc[:100]  # 100文字まで
+                if len(desc) >= 2:
+                    result.description = desc
                     break
 
         # 抽出成功判定
