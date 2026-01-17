@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70"
+  },
   "permissions": {
     "allow": [
       "Bash(tree /d \"c:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\" /L 2)",
@@ -18,20 +21,12 @@
       "Bash(git push:*)",
       "Bash(timeout:*)",
       "Bash(chcp 65001)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(echo:*)"
     ],
     "additionalDirectories": [
       "c:\\ProgramData\\RK10\\Robots\\44PDF一般経費楽楽精算申請\\docs"
     ]
-  },
-  "plansDirectory": "./plans",
-  "env": {
-    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70"
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .claude/statusline.ps1",
-    "padding": 0
   },
   "hooks": {
     "SessionStart": [
@@ -46,5 +41,11 @@
         ]
       }
     ]
-  }
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .claude/statusline.ps1",
+    "padding": 0
+  },
+  "plansDirectory": "./plans"
 }
