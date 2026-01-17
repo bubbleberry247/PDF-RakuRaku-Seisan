@@ -1,17 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(tree /d \"c:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\" /L 2)",
+      "Bash(tree /d \"c:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\" /L 2)",
       "Bash(python:*)",
-      "Bash(dir \"C:\ProgramData\RK10\common\ocr_tools\*.bat\")",
+      "Bash(dir \"C:\\ProgramData\\RK10\\common\\ocr_tools\\*.bat\")",
       "Bash(dir:*)",
       "Bash(find:*)",
-      "Bash(ls -la \"C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\"\" 2>/dev/null || dir \"C:ProgramDataRK10Robots44PDF一般経費楽楽精算申請\"\")",
-      "Bash(ls -la \"C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\scenario\"\" 2>/dev/null || dir \"C:ProgramDataRK10Robots44PDF一般経費楽楽精算申請scenario\"\")",
+      "Bash(ls -la \"C:\\ProgramData\\RK10\\Robots\\44PDF一般経費楽楽精算申請\"\" 2>/dev/null || dir \"C:ProgramDataRK10Robots44PDF一般経費楽楽精算申請\"\")",
+      "Bash(ls -la \"C:\\ProgramData\\RK10\\Robots\\44PDF一般経費楽楽精算申請\\scenario\"\" 2>/dev/null || dir \"C:ProgramDataRK10Robots44PDF一般経費楽楽精算申請scenario\"\")",
       "Bash(xcopy:*)",
       "Bash(tasklist:*)",
       "Bash(findstr:*)",
-      "Bash(cmd /c \"dir /b C:\ProgramData\RK10\Tools\OCR-JA\output\")",
+      "Bash(cmd /c \"dir /b C:\\ProgramData\\RK10\\Tools\\OCR-JA\\output\")",
       "Bash(powershell -Command:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
@@ -21,12 +21,17 @@
       "Bash(ls:*)"
     ],
     "additionalDirectories": [
-      "c:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\docs"
+      "c:\\ProgramData\\RK10\\Robots\\44PDF一般経費楽楽精算申請\\docs"
     ]
   },
   "plansDirectory": "./plans",
   "env": {
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .claude/statusline.ps1",
+    "padding": 0
   },
   "hooks": {
     "SessionStart": [
@@ -35,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR\\.claude\\hooks\\sessionstart_load_decisions.ps1\"",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/sessionstart_load_decisions.ps1",
             "timeout": 120
           }
         ]

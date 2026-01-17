@@ -5,6 +5,26 @@
 
 ---
 
+## Quick Start（よく使うコマンド）
+
+```bash
+cd "C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\tools"
+
+# 前処理のみ
+python main_44_rk10.py --pre
+
+# 一括登録
+python main_44_rk10.py --run-all
+```
+
+## このドキュメントの使い方
+
+- シナリオ44の改善・変更をする前に本書で「現状のフロー/閾値/既知課題」を確認する
+- 仕様や運用の"決定"が発生したら `plans/decisions.md` に追記する（[KAIZEN]推奨）
+- ctx>=70%などで引き継ぎが必要なら `plans/handoff.md` を更新する
+
+---
+
 ## 1. 概要
 
 ### 1.1 目的
