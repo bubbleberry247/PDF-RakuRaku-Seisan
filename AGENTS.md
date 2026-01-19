@@ -258,3 +258,14 @@ Plan → Do（委託/実装） → Check（検証） → Act（改善/記録）
 
 ### 2026-01-17
 - 正本をAGENTS.mdに移行し、CLAUDE.mdを入口化（@AGENTS.md）
+
+### 2026-01-18
+- **ブラウザ選択**: シナリオ作成でブラウザを使用する際は **Edge** を使用すること（Chrome禁止）
+
+### 2026-01-19
+- **OCR精度改善手順**（69.2% → 84.6%達成）:
+  1. **診断ログ強化で原因特定** - vendor空時に `line_info`, `line_count`, `image_height` を出力し「OCR認識不足」vs「抽出ロジック不足」を切り分け
+  2. **NG分析 → 対策決定** - raw_textに文字あり→パターン追加 / raw_text空→画像品質問題（DPI/ROI）
+  3. **ファイル名抽出強化** - `vendor_keywords` にキーワード追加（名鉄協商、ゆうちょ銀行等）
+  4. **カスケードOCR** - `lite_mode=True` → 欠損時のみ `lite_mode=False` で再処理
+  - 詳細: `docs/KNOWLEDGE_OCR_PREPROCESSING.md`
