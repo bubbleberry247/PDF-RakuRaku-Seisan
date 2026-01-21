@@ -21,3 +21,12 @@ config/*_LOCAL.xlsx
 
 # テストデータ（PDF、機密含む可能性）
 data/MOCK_FAX/
+
+# cases - local config (do not commit)
+cases/**/config/local.yaml
+cases/**/config/local.yml
+
+# cases - logs/output (do not commit)
+cases/**/logs/
+cases/**/output/
+cases/**/rk10/exports/

@@ -269,3 +269,45 @@ Plan → Do（委託/実装） → Check（検証） → Act（改善/記録）
   3. **ファイル名抽出強化** - `vendor_keywords` にキーワード追加（名鉄協商、ゆうちょ銀行等）
   4. **カスケードOCR** - `lite_mode=True` → 欠損時のみ `lite_mode=False` で再処理
   - 詳細: `docs/KNOWLEDGE_OCR_PREPROCESSING.md`
+
+- **リポジトリ統合**: 外部リポジトリのソースコードをPDF-RakuRaku-Seisanに集約
+  - **コピー先**: `c:/ProgramData/Generative AI/Github/PDF-RakuRaku-Seisan/external-repos/`
+  - **含まれるリポジトリ**:
+    | リポジトリ | 内容 | ファイル数 |
+    |-----------|------|-----------|
+    | agent-browser-src | ブラウザ自動操作ツール（Rust CLI + TypeScript） | 31 |
+    | claude-skills | Claudeスキル集（slide-studio: PowerPoint操作） | 25 |
+    | keyence-project | キーエンス関連（ファイル情報収集・修正ツール） | 4 |
+    | my-claude-skills | 自作スキル（pdf-ocr, rk10-scenario） | 8 |
+  - **バックアップ**: `c:/ProgramData/Generative AI/Github/PDF-RakuRaku-Seisan_backup_20260119_175636`
+  - **除外**: `node_modules`, `target`, `dist`, `.git` 等の生成物
+
+- **RK10シナリオ(.rks)編集方法**:
+  - .rksファイルは**ZIP形式**のアーカイブ
+  - **編集対象**: `Program.cs` のみ（`id`/`meta`はRK10が自動再生成）
+  - **編集手順**:
+    ```python
+    import zipfile
+    # 1. RKSからProgram.csを読み込み
+    with zipfile.ZipFile('scenario.rks', 'r') as z:
+        code = z.read('Program.cs').decode('utf-8-sig')
+    # 2. コードを修正
+    modified_code = code.replace('$@"2025.11"', '$@"{string10}"')
+    # 3. 新しいRKSを作成
+    with zipfile.ZipFile('original.rks', 'r') as src:
+        with zipfile.ZipFile('modified.rks', 'w') as dst:
+            for item in src.namelist():
+                if item == 'Program.cs':
+                    dst.writestr(item, modified_code.encode('utf-8-sig'))
+                else:
+                    dst.writestr(item, src.read(item))
+    ```
+  - **よくある修正パターン**:
+    | 修正前 | 修正後 | 説明 |
+    |--------|--------|------|
+    | `$@"2025.11"` | `$@"{string10}"` | 月のシート名を動的変数に |
+    | `$@"yyyy.MM"` | `$@"yyyyMM"` | 日付フォーマット修正 |
+    | OpenFileのみ | OpenFile + CloseFile | ファイル閉じ忘れ対応 |
+  - **詳細スキル**: `external-repos/my-claude-skills/rk10-scenario/skill.md`
+
+- **GitHubリポジトリ接続先**: `https://github.com/bubbleberry247/PDF-RakuRaku-Seisan.git`

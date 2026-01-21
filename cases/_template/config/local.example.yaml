@@ -1,0 +1,19 @@
+# Local Configuration Example
+# このファイルをコピーして local.yaml を作成
+# local.yaml は .gitignore で除外（機密情報を含むため）
+
+# 認証情報（ローカル環境用）
+credentials:
+  site_username: "your_username"
+  site_password: "your_password"
+
+# デバッグ設定
+debug:
+  headless: false
+  screenshot_on_error: true
+  verbose_logging: true
+
+# ローカル固有のパス
+paths:
+  input_dir: "C:\\path\\to\\local\\input"
+  output_dir: "C:\\path\\to\\local\\output"

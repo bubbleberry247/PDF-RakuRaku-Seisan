@@ -33,6 +33,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Skills（ドメイン知識スキル）
 
+### RK10シナリオスキル（最重要）
+
+**場所**: `.claude/skills/rk10-scenario/`
+**自動参照**: @.claude/skills/rk10-scenario/SKILL.md
+
+**キーワード**: RK10、Keyence、シナリオ、.rks、Program.cs、pywinauto
+
+**知識範囲**:
+- .rksファイル編集（ZIP形式、Program.csのみ編集）
+- RK10 UI操作（pywinauto UIA）
+- Keyence C# API（Excel、日付、ファイル操作）
+- エラーパターンと解決策
+
+---
+
+### PDF OCRスキル
+
+**場所**: `.claude/skills/pdf-ocr/`
+**自動参照**: @.claude/skills/pdf-ocr/SKILL.md
+
+**キーワード**: PDF、OCR、テキスト抽出、請求書、領収書、回転補正、傾き補正
+
+---
+
 ### レコル（RecoRu）スキル
 
 **場所**: `.claude/skills/recoru/`

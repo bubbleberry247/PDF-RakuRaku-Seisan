@@ -1,0 +1,33 @@
+# Project Configuration
+# このファイルはGit管理対象（機密情報は local.yaml に分離）
+
+customer: "{CUSTOMER}"
+project: "{PROJECT}"
+scenario_id: "{SCENARIO_ID}"
+
+# 環境設定
+environments:
+  local:
+    robot_path: "C:\\ProgramData\\RK10\\Robots\\{SCENARIO_ID}{PROJECT}"
+    log_path: "C:\\ProgramData\\RK10\\Robots\\{SCENARIO_ID}{PROJECT}\\logs"
+  prod:
+    robot_path: "C:\\ProgramData\\RK10\\Robots\\{SCENARIO_ID}{PROJECT}"
+    log_path: "C:\\ProgramData\\RK10\\Robots\\{SCENARIO_ID}{PROJECT}\\logs"
+
+# 通知設定
+notification:
+  enabled: true
+  recipients:
+    - "{EMAIL}"
+  subject_template: "[RPA][{ENV}][{CUSTOMER}][{PROJECT}][{SCENARIO}] {STATUS} step={STEP_ID} run={RUN_ID}"
+
+# リトライ設定
+retry:
+  default_max_attempts: 3
+  default_wait_seconds: 5
+
+# タイムアウト設定（秒）
+timeout:
+  page_load: 30
+  element_wait: 10
+  network_idle: 5

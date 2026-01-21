@@ -1,95 +1,58 @@
 # handoff.md（短く・上書き前提）
 
 ## Current focus
-- シナリオ44 OCR精度改善 - **目標達成済み (84.6%)**
+- **シナリオ55 15日25日末日振込エクセル作成** - 担当者確認事項整理完了、確認待ち
 
-## Done
-- AGENTS.md 正本化、CLAUDE.md 入口化（Phase 1）
-- SessionStart hook で decisions + handoff 自動注入設定
-- 運用ドキュメント7本作成 → v0.2に更新
-- **運用体制をOM3に確定**
-- **シナリオ37 完了**（レコルAPI統合、PDF保存、メール送信、RKSファイル作成）
-- **シナリオ44 OCR精度改善完了** (2026-01-19):
-  - **改善前: 69.2% (9/13)** → **改善後: 84.6% (11/13)** 目標80%達成
-  - 2段階カスケードOCR実装（lite_mode=True → 欠損時のみ再処理）
-  - ファイル名からの取引先抽出強化（銀行・駐車場キーワード追加）
-  - 診断用ログ強化（line_info, line_count, image_height追加）
-  - NumpyEncoder追加（float32 JSONシリアライズ修正）
+## Done (今回セッション)
+- シナリオ55の現状確認
+- Excel書き起こし確認（`C:\Users\masam\Desktop\KeyenceRK\20251201RPAロボット手順詳細.xlsx` シート55）
+- 詳細業務フロー整理（全25ステップ）
+- **人間確認タイミング整理**:
+  - RPA処理後に人間確認（A.未登録支払先の業者番号記入、B.科目確認・修正、C.支払先計調整、D.合計照合、E.上書き保存）
+  - 設計思想:「人間の判断を代替する」ではなく「人間が判断しやすい状態を作る」
+- **担当者確認事項リスト作成**（全22項目）:
+  - 高優先: 科目使い分けルール、未登録支払先処理、シート名リネームルール、摘要省略ルール
+  - 中優先: 計算式入りテンプレート準備、本番ファイル直接保存 or 作業用コピー
+  - 低優先: 実行スケジュール詳細、総合振込以外の処理
+- **PPTX出力**: `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\docs\55_人間確認タイミング.pptx`（A4縦3ページ）
 
-## 実装済み機能 (2026-01-19)
-1. **2段階カスケードOCR** (pdf_ocr_smart.py)
-   - `lite_mode=True` → 欠損時のみ `lite_mode=False` で再処理
-   - `--cascade` オプションで有効化
-2. **ファイル名からの取引先抽出強化** (pdf_ocr_smart.py)
-   - `vendor_keywords` に銀行・駐車場を追加
-   - 「名鉄協商」「ゆうちょ銀行」等
-3. **診断用ログ強化** (pdf_ocr_yomitoku.py, ocr_debug_logger.py)
-   - `line_info`, `line_count`, `image_height` フィールド追加
-   - NG時に自動でデバッグログ保存
-4. **NumpyEncoder** (ocr_debug_logger.py:24-33)
-   - float32 JSON シリアライズエラー修正
-
-## Key learnings (OCR)
-1. **YomiTokuには追加前処理が不要** - 内部で高品質な前処理を持つ
-2. **RGB→Gray→RGB変換は避けるべき** - 情報損失を引き起こす
-3. **Tesseract向けTipsはYomiTokuに適用不可** - 白ボーダー等は逆効果
-4. **dpi 200 vs 300 は影響なし** - 300dpi維持で問題なし
-5. **カスケード処理が有効** - lite_mode失敗時のフォールバックで精度向上
-
-## 残りのNG（2件）
-1. **東京インテリア家具.pdf** - 取引日が欠損（vendorはファイル名から抽出OK）
-2. **領収証2025.12.26.pdf** - OCR全滅（raw_text 0文字）、画像品質問題
+## Done (過去セッション)
+- シナリオ55 Python実装完了（main.py, rakuraku_scraper.py, excel_writer.py）
+- RKSシナリオ作成済み（５５_自動化版_v2_mailfix.rks）
+- テスト実行済み（28件中17件転記成功、77.3%）
+- シナリオ43 ETC明細作成 一時停止（ExternalResourceReader問題）
 
 ## Next (top 3)
-1. Phase 3: ROI切り出し実装（背景除去で更に精度向上の可能性）
-2. マスキング関数実装/既存ログの機微情報チェック（LP-004/LP-005）
-3. config/*.xlsxの構造確認 → スキーマ定義完成（CS-001/CS-002）
+1. **シナリオ55 担当者確認**: PPTXの確認事項を吉田さんに確認
+2. **シナリオ55 本番運用開始**: 確認事項回答後、本番環境でテスト実行
+3. **シナリオ43 再開**: ExternalResourceReader問題の根本解決
 
-## Risks / blockers
-- 残り2件のNGは画像品質の問題で、システム改善の限界
-- 二重登録防止策の実装状況が未確認（RB-004）
+## Risks
+- シナリオ55: 科目の使い分けルールが明確でない場合、人間確認の負荷が高い
+- シナリオ55: 未登録支払先が多い月は6799行が不足する可能性
 
-## Verification commands
-```bash
-# シナリオ44 OCRテスト（カスケードモード）
-cd C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\tools
-python test_sample_ocr.py --cascade --sample-dir "C:\ProgramData\RK10\Tools\sample PDF\精度低い"
-# 期待結果: OK 11/13 (84.6%)
+## Relevant files
+### シナリオ55関連
+| ファイル | 用途 |
+|---------|------|
+| `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\docs\55_人間確認タイミング.pptx` | **担当者確認用資料（A4縦3ページ）** |
+| `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\docs\55_振込Excel転記_工程手順書.md` | 工程手順書（v1.0） |
+| `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\docs\55_振込Excel転記_設計書.md` | 設計書（v1.0） |
+| `C:\Users\masam\Desktop\KeyenceRK\20251201RPAロボット手順詳細.xlsx` | **業務フロー書き起こし元（シート55）** |
+| `\\172.20.0.70\ユニオン共有\★公開フォルダ\吉田さん閲覧フォルダ\5F\3建設事業部\東海インフル建設(株)\☆総合振込\総合振込計上・支払伝票.xlsx` | 転記先Excel（本番） |
 
-# シナリオ44 OCRテスト（全体）
-python test_sample_ocr.py --cascade
-# 期待結果: 高精度
+### シナリオ55 RKS/ツール
+| ファイル | 状態 |
+|---------|------|
+| `scenario\５５_自動化版_v2_mailfix.rks` | 最新版 |
+| `tools\main.py` | メイン制御 |
+| `tools\rakuraku_scraper.py` | 楽楽精算スクレイピング |
+| `tools\excel_writer.py` | Excel転記処理 |
 
-# シナリオ37 テストモード
-cd C:\ProgramData\RK10\Robots\37レコル公休・有休登録
-run_37_test.bat
-```
-
-## Relevant files (full paths)
-### シナリオ44 (OCR)
-- `C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\tools\pdf_ocr_smart.py` - メインOCR処理（カスケード実装）
-- `C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\tools\pdf_ocr_yomitoku.py` - YomiToku呼び出し
-- `C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\tools\ocr_debug_logger.py` - デバッグログ（NumpyEncoder追加）
-- `C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\tools\pdf_preprocess.py` - 前処理
-- `C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\tools\test_sample_ocr.py` - テストスクリプト
-- `C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\docs\KNOWLEDGE_OCR_PREPROCESSING.md` - 知見記録
-
-### シナリオ37 (レコル)
-- `C:\ProgramData\RK10\Robots\37レコル公休・有休登録\tools\main_37.py`
-- `C:\ProgramData\RK10\Robots\37レコル公休・有休登録\senario\37レコル公休有休登録_20260118.rks`
-
-## OCR確定設定 (pdf_ocr_smart.py)
-```python
-# カスケードモード推奨
-do_deskew=True,
-do_enhance=False,       # YomiTokuに任せる
-do_shadow_removal=True,
-do_border=False,        # OFF（YomiTokuには逆効果）
-do_sharpen=False,       # OFF
-do_stretch=False,       # OFF（RGB→Gray変換で劣化）
-do_thickness_adjust=False,  # OFF（RGB→Gray変換で劣化）
-```
-
-## Next change (if current approach fails)
-- Phase 3: ROI切り出し実装（背景除去で更に精度向上の可能性）
-- 残り2件のNG対応は画像品質の問題で、システム改善の限界
+### シナリオ55 担当者確認事項（優先度高）
+| No | 確認事項 | 現在の仮実装 |
+|----|---------|-------------|
+| 3-1 | 科目の使い分けルール？ | 既存行の科目を使用（人間確認必須） |
+| 4-1 | 未登録支払先の処理方法？ | 6799行に転記（業者番号空欄） |
+| 1-2 | シート名リネームルール？ | R{和暦}.{月}月分を自動生成 |
+| 2-2 | 摘要の省略ルール？ | 省略なし（そのまま転記） |
