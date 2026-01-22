@@ -1,2 +1,6 @@
 ﻿site_key,site_name,base_url,login_type,a11y_grade,recommended_primary,recommended_fallback,stability_notes,last_verified
 eco-serv_web_billing,JAHIC WEB請求サービス (eco-serv),https://rbbrier.eco-serv.jp/etc/mypage/,ID/PW (no MFA observed),A,Playwright,Agent Browser / RK10,"ZIPリンクのAccessible Nameがファイル名(.zip)。download完了保証はPlaywrightが最強。",2026-01-22
+rakuraku_seisan,楽楽精算,(要記入: 貴社の楽楽精算URL),SSO/IDPW(要確認),B/C(暫定),Playwright or RK10(要検証),Agent Browser / RK10,"frameset/画面構造の影響が出やすい可能性。まずframe有無とA11y Name品質を確認し、BならPlaywright（frameLocator＋待機強化）、CならRK10併用が堅い。",2026-01-22
+drive_report,drive-report.net,(要記入: drive-reportログインURL),ID/PW(要確認),B(暫定),Playwright,Agent Browser / RK10,"無意味Nameが局所に集中する傾向（仮）。親領域で絞れば安定する想定。",2026-01-22
+cybozu_kintone,サイボウズ（kintone/Garoon）,(要記入: 貴社cybozuドメインURL),SSO/MFAの可能性(要確認),B(暫定: 設定次第),API優先(可能なら) / Playwright(要検証),RK10,"設定差が大きい。可能ならAPI/エクスポート導線を優先。UIは待機・権限・画面遷移の影響が出やすい。",2026-01-22
+recoru,レコル（RecoRu）,(要記入: RecoRuログインURL),ID/PW or SSO(要確認),B(暫定),API(あるなら) / Playwright,RK10,"API併用が強い領域。UIは帳票DL/一覧操作が中心ならPlaywrightで安定化可能。",2026-01-22
