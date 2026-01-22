@@ -30,3 +30,7 @@ cases/**/config/local.yml
 cases/**/logs/
 cases/**/output/
 cases/**/rk10/exports/
+
+# rk10_project_pack - Evidence（肥大化防止、サンプルのみ残す）
+rk10_project_pack/90_EVIDENCE/**
+!rk10_project_pack/90_EVIDENCE/decisions_sample.md
