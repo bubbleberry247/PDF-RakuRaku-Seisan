@@ -34,3 +34,12 @@ cases/**/rk10/exports/
 # rk10_project_pack - Evidence（肥大化防止、サンプルのみ残す）
 rk10_project_pack/90_EVIDENCE/**
 !rk10_project_pack/90_EVIDENCE/decisions_sample.md
+
+# --- ignore local / wip artifacts (added) ---
+.claude/settings.local.json
+_wip/
+docs/_wip/
+tools/_wip/
+docs/screenshots/
+etc_*.png
+tools/realesrgan/
