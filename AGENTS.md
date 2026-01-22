@@ -42,6 +42,40 @@
 - 「できる」前提で進める：
   - まず実現案（A案）を提示し、制約があれば代替案（B案）を出す。
   - "できない"で止めない。できない場合は「できない理由」と「最小の打ち手」を提示する。
+## リポジトリ衛生ルール（正本 / WIP / 生成物）
+
+本リポジトリは「知見を蓄積し、複数LLM（Claude Code CLI / Codex / ChatGPT Projects）で共有しながら鍛える」ことを目的とする。
+そのため、GitHubに残すのは再利用可能な“正本”のみとし、作業生成物や一時物でリポジトリが汚れないように運用する。
+
+### 1) 正本（GitHubにコミットしてよいもの）
+- `rk10_project_pack/`：ナレッジ正本（INDEX / パターン / トラブル集 / Playbook / Templates / Snippets）
+- `plans/`：意思決定・引継ぎ・運用ログ（decisions/handoff 等）
+- `tools/`：再利用するスクリプトの“最終版（canonical）”のみ
+  - 例：`tools/fix_xpath_zip.py` のように1目的=1ファイル名に統一する
+- `.claude/skills/`：共有スキル（SKILL.md 等）※共有に値するもののみ
+
+### 2) WIP（GitHubにコミットしない：ローカル保持のみ）
+- `_wip/`, `docs/_wip/`, `tools/_wip/`：試行錯誤・一時退避の置き場（必ず .gitignore 対象）
+- `docs/screenshots/`：自動生成スクリーンショット（連番が増えるため原則コミット禁止）
+- `tools/realesrgan/` 等の重い依存物・バイナリ配布物（zip/モデル等）は原則コミット禁止
+- `.claude/settings.local.json`：ローカル専用設定（個別PC差分・秘密情報混入の温床のためコミット禁止）
+
+### 3) 例外（証跡として残す場合）
+- 画面キャプチャや証跡が必要な場合は、以下の条件を満たす“curated evidence”のみコミット可：
+  1. 個人情報・ID/PW・顧客固有情報が含まれない（マスク/トリミング済み）
+  2. 連番ではなく説明的ファイル名（例：`docs/assets/rk10/extract_table_settings.png`）
+  3. 関連する手順書（Playbook / Troubleshooting）からリンクされる
+
+### 4) 運用手順（更新の型）
+1. 詰まり・知見が出たら `rk10_project_pack/03_TROUBLESHOOTING.md` に追記（事実→原因→対策）
+2. 再利用できる形になったら `rk10_project_pack/04_PLAYBOOKS/` に昇格
+3. 入口の `rk10_project_pack/01_INDEX.md` を必ず更新（検索導線の維持）
+4. 生成物や依存物が混ざったら、コミット前に WIPへ退避し `.gitignore` で遮断する
+
+### 5) コミット前チェック（最低限）
+- `git status -sb` が「意図した正本の変更のみ」になっていること
+- 生成物（スクショ・zip・依存物）が含まれていないこと
+- 秘密情報が混入していないこと（必要なら簡易スキャン）
 
 ### 改善タスクの標準フォーマット（Planに必ず含める）
 ```
