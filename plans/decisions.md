@@ -590,3 +590,441 @@ var 使用月元 = GetItem(list2, 3);  // 202512が取得できる
 - `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\scenario\４３ETC-実行環境選択可能版-20251227-1ー申請用ファイル作成_タスク結合版_fixed_v7_xpath_fix_v20.rks`
 
 **横展開確認**: 他シナリオで同様のZIPファイル名分割ロジックがある場合は同様の修正が必要
+
+### [CODE][KAIZEN] シナリオ43 Excel表抽出エラーの根本原因特定
+
+**エラー**: `ExcelToDataTableConversionFailedException` - "表の抽出に失敗しました"
+
+**調査結果**:
+- v7_xpath_fix.rks（および派生バージョンv8-v24）でも同じエラーが発生
+- **番号付きZIPファイル対応（v20の修正）は直接の原因ではなかった**
+
+**根本原因**:
+| バージョン | ConvertExcelToDataTable 第2引数 | 結果 |
+|-----------|-------------------------------|------|
+| **完成版** | `ExternalResourceReader.GetResourceText("E2463B7B...")` | **成功** |
+| v7系 | `null` | **失敗** |
+
+- `ConvertExcelToDataTable` の第2引数はテーブル構造定義
+- `ExternalResourceReader` は RKS内の `meta` バイナリファイルに格納されたリソースを参照
+- v7系は `null` を渡しているため、テーブル構造が定義されずExcel表抽出に失敗
+
+**解決策**:
+- **完成版をベースにして修正版を作成**（v7系ではなく）
+- 完成版の `meta` ファイルには必要なリソース定義が含まれている
+
+**追加発見: ハードコードされたシート名**:
+- 完成版の139行目: `SelectSheet(..., $@"2025.11", 1);`
+- 2025.11がハードコードされており、別の月では失敗する
+- **修正**: `$@"2025.11"` → `$@"{string10}"` に変更
+- `string10` = 使用月年をyyyy.MM形式に変換した値（例: "2026.01"）
+
+**変数の関係**:
+```
+使用月元 = GetItem(SplitText(filename, "_"), 3) → "202512"
+使用月 = GetSubText(使用月元, 0, 6) → "202512"
+使用月年 = 使用月 + 1ヶ月 → 202601
+string10 = yyyy.MM形式 → "2026.01"
+TargetSheet = 使用月 → "202512"（CSV用）
+```
+
+**作成ファイル**:
+- `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\scenario\４３ETC-実行環境選択可能版-20251227-1ー申請用ファイル作成完成版_fixed_v25.rks`
+
+**重要な学び**:
+1. RKS編集時は `Program.cs` だけでなく `meta` ファイルの依存関係も確認する
+2. `ExternalResourceReader.GetResourceText()` を使用している場合、その RKS の `meta` ファイルが必須
+3. 異なるベースRKSから派生させる場合、リソース参照の整合性を確認する
+
+
+### [CODE][KAIZEN] シナリオ43 v27修正（DelimiterType.Specified問題）
+
+**問題**: v26でを使用したがAPIに存在しない
+- ビルドエラー: 
+
+**調査結果**:
+- Keyence APIのには等は存在するがは存在しない
+- カスタム区切り文字を直接指定する方法は提供されていない
+
+**解決策**: アンダースコアをスペースに置換してからスペースで分割
+
+
+
+**テスト結果**: ✅ ビルド成功、実行正常終了
+
+**作成ファイル**:
+- 
+
+**学び**: Keyence RK10でカスタム区切り文字による分割が必要な場合はで置換後にで分割する
+
+
+### [CODE][KAIZEN] シナリオ43 v27修正（DelimiterType.Specified問題）
+
+**問題**: v26で`Keyence.TextActions.DelimiterType.Specified`を使用したがAPIに存在しない
+- ビルドエラー: `'DelimiterType' の 'Specified' の定義が見つかりません`
+
+**調査結果**:
+- Keyence APIの`DelimiterType`には`Space`等は存在するが`Specified`は存在しない
+- カスタム区切り文字を直接指定する方法は提供されていない
+
+**解決策**: アンダースコアをスペースに置換してからスペースで分割
+
+```csharp
+// v26（エラー）:
+var list2 = SplitText(list1_first, ..., DelimiterType.Specified, ..., "_", ...);
+
+// v27（修正後）:
+var list1_replaced = ReplaceText(list1_first, "_", " ", ReplaceMode.All, ...);
+var list2 = SplitText(list1_replaced, ..., DelimiterType.Space, ..., " ", ...);
+```
+
+**テスト結果**: ✅ ビルド成功、実行正常終了
+
+**作成ファイル**:
+- `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\scenario\４３ETC-実行環境選択可能版-20251227-1ー申請用ファイル作成完成版_fixed_v27.rks`
+
+**学び**: Keyence RK10でカスタム区切り文字による分割が必要な場合は`ReplaceText`で置換後に`DelimiterType.Space`で分割する
+
+## 2026-01-22
+
+### [CODE][KAIZEN] シナリオ43 完成版分析・知見抽出
+
+**ファイル**: `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\scenario\４３一般経費_日本情報サービス協同組合(ETC)明細の作成_完成版.rks`
+
+#### 1. 環境切り替えパターン（PROD/LOCAL）
+```csharp
+// env.txt読み込み→Trim→UpperCase
+var Env = ReadAllText("..\\config\\env.txt", Auto);
+Env = TrimText(Env, Both);
+Env = ChangeTextCase(Env, UpperCase);
+
+// 環境に応じた設定ファイル選択
+if (CompareString(Env, "PROD", Equal, false))
+    ConfigPath = "..\\config\\RK10_config_PROD.xlsx";
+else if (CompareString(Env, "PROD", NotEqual, false))
+    ConfigPath = "..\\config\\RK10_config_LOCAL.xlsx";
+```
+
+#### 2. Excel設定ファイルからの変数展開パターン
+```csharp
+var exce1 = OpenFileAndReturnPath(ConfigPath, false, "", true, "", true, true);
+var cfg_ENV = GetCellValue(A1, 1, 1, "B2", String);
+var ROOT_TIC_MAIN = GetCellValue(A1, 1, 1, "B3", String);
+// ... B4〜B24まで各種パス・設定を取得
+CloseFile();
+```
+**知見**: 設定はExcelで一元管理し、B列に値を配置する形式が標準
+
+#### 3. Windows資格情報からのパスワード取得
+```csharp
+var loginId = ReadPasswordFromCredential("ログインID　ETC");
+var password = ReadPasswordFromCredential("パスワード　ETC");
+```
+**知見**: 資格情報名に全角スペースが含まれる場合がある
+
+#### 4. ZIPダウンロード・展開のリトライパターン
+```csharp
+var UnzipOK = false;
+foreach (var カウンター1 in RepeatCount(10))
+{
+    try
+    {
+        UncompressFile(string11, 解凍フォルダ, true, "", ShiftJis);
+        UnzipOK = true;
+        break;
+    }
+    catch (System.Exception エラー1) when (エラー1 is not ForceExitException)
+    {
+        Wait(2d);
+    }
+}
+if (InvertBool(UnzipOK))
+{
+    OutputUserLog("ZIP展開に10回失敗。...");
+    return;
+}
+```
+**知見**:
+- リトライは`RepeatCount(N)`でループ
+- 成功時は`break`で抜ける
+- `ForceExitException`は再throwする（シナリオ強制終了用）
+- 失敗時は`return`でシナリオ終了
+
+#### 5. ExternalResourceReader.GetResourceText の使い方
+```csharp
+var dataTable = ConvertExcelToDataTable(csvPath,
+    ExternalResourceReader.GetResourceText("E2463B7B8AC340D5E86F57254B57D6D13EB8A3A8"),
+    new List<string> { "*" });
+```
+**知見**:
+- `ConvertExcelToDataTable`の第2引数はRK10 GUIで設定した「表の抽出」のserializedConfig
+- ハッシュ値（SHA1風）でリソースを参照
+- **手動で空文字列に置き換えると実行時エラーになる**
+- このリソースはRK10 GUIでの再設定が必要
+
+#### 6. 日付フォーマット変換パターン
+```csharp
+// ファイル名から使用年月を抽出
+var list1 = SplitText(string12, true, DelimiterType.Space, 1, "_", false);
+var 使用年月 = GetItem(list1, 3);  // "202512"
+var 使用年 = GetSubText(使用年月, CharacterPosition, 0, NumberOfChars, 6);
+
+// 翌月の日付を計算
+var 使用翌月 = AddDatetime(ConvertFromTextToDatetime($"{使用年}01", true, "yyyyMMdd"), 1, Month);
+
+// yyyy.MM形式に変換
+var string10 = ConvertFromDatetimeToText(使用翌月, true, ShortDate, "yyyy.MM");
+```
+
+#### 7. Excelフィルタリングパターン
+```csharp
+// 種別が「小計」以外 かつ 利用金額が0より大きい
+FilterRow(A1, Single, 9, 3, 9, 3, "S4", "種別", Text, NotEqual, "", ...);
+FilterRow(A1, Single, 1, 1, 1, 1, "L4", "利用金額", Numeric, GreaterThan, 0d, ...);
+```
+
+#### 8. PDF座標からのテキスト抽出
+```csharp
+// ExtractText(pdfPath, pageNum, x, y, width, height)
+var 発行日情報 = ExtractText(pdfPath, 1, 143, 308, 141, 13);
+var 請求金額情報 = ExtractText(pdfPath, 1, 115, 275, 189, 18);
+```
+**知見**: 座標はピクセル単位。PDFレイアウト変更時は要修正
+
+#### 9. Excelでの「合計」行検索パターン
+```csharp
+var list2 = GetMatchValueList(A1, 1, 1, 1, 1, "j:j", "合計", false);
+cellJ = GetItem(list2, 0);  // "$J$123" 形式
+cellJ = ReplaceText(cellJ, "$", false, false, "", false, false);
+var string19 = ReplaceText(cellJ, "J", false, false, "", false, false);
+foundRow = ConvertFromObjectToInteger(string19);
+```
+**知見**: `GetMatchValueList`は`$列$行`形式で返すため、置換で行番号を抽出
+
+#### 10. 部門別金額取得ループパターン
+```csharp
+var 金額管理 = -1;  // -1は未取得の意味
+foreach (var loop1 in RepeatCount(50))
+{
+    var rowStr = ConvertFromObjectToText(row);
+    cellJ = Concat("J", rowStr);
+    合計ラベル = GetCellValue(A1, 1, 1, cellJ, String);
+
+    if (CompareString(合計ラベル, "合計", NotEqual, false))
+        break;  // 「合計」以外の行に到達したら終了
+
+    cellR = Concat("S", rowStr);
+    部門名 = GetCellValue(A1, 1, 1, cellR, String);
+
+    if (CompareDouble(金額管理, -1d, Equal) && CompareString(部門名, "管理", Equal, false))
+    {
+        金額管理 = 取得金額;
+        foundCount += 1;
+    }
+    // ... 他の部門も同様
+
+    if (CompareDouble(foundCount, 5d, Equal))
+        break;  // 5部門すべて取得したら終了
+    else
+        row += -1;
+}
+```
+**知見**: 下から上に走査（row += -1）して部門別合計を取得
+
+#### 11. ファイルコピーのリトライパターン
+```csharp
+foreach (var カウンター2 in RepeatCount(30))
+{
+    try
+    {
+        CopyFileDirectory(srcPath, dstPath, true);
+        MoveDirectory(srcDir, dstDir, true);
+        break;
+    }
+    catch (System.Exception エラー2) when (エラー2 is not ForceExitException)
+    {
+        // 待機なしでリトライ
+    }
+}
+```
+
+#### 12. メール送信パターン（HTML形式）
+```csharp
+SendHtmlMail("", mailAddress, "", "", subject, attachmentPath, false,
+    new List<HtmlMailBodyContent> {
+        HtmlBodyContentCreator.CreateString("本文テキスト"),
+        HtmlBodyContentCreator.CreateHyperlink("リンク表示名", "https://...")
+    }, "");
+```
+
+#### 重要な暗黙知まとめ
+
+| 項目 | 暗黙知 |
+|------|--------|
+| 変数命名 | 日本語変数名を多用（Keyence標準） |
+| Wait | 数値に`d`サフィックス（double型） |
+| リトライ | `RepeatCount(N)` + try-catch + break |
+| 環境切替 | env.txt + RK10_config_{ENV}.xlsx |
+| 資格情報 | 名前に全角スペースあり得る |
+| Excel座標 | `GetMatchValueList`は`$列$行`形式 |
+| DataTable | `ExternalResourceReader.GetResourceText`はGUI設定必須 |
+| PDF抽出 | 座標指定（ピクセル） |
+| ループ終了 | `break`で抜ける、`return`でシナリオ終了 |
+
+---
+
+## 2026-01-21
+
+### [CODE][KAIZEN] シナリオ43 ZIPダウンロードXPath修正（v41）
+
+**問題**: ETCサイトのUI変更により、ZIPダウンロードリンクのXPath `//a[contains(@href, '.zip')]` が見つからない
+
+**調査結果**:
+- ZIPダウンロードリンクには**href属性がない**（JavaScriptクリックハンドラーで処理）
+- HTML構造: `<a class="sc-gyycJP KKYCe"><div><div><p>11278_11278_東海インプル建設㈱_202512.zip</p></div></div></a>`
+- リンクのテキストは`<p>`タグ内に存在
+
+**解決策**: `<p>`タグ内の`.zip`テキストを検索し、親の`<a>`タグに移動するXPath
+
+```
+修正前: //a[contains(@href, '.zip')]
+修正後: (//p[contains(text(), '.zip')]/ancestor::a)[1]
+```
+
+- `//p[contains(text(), '.zip')]`: `.zip`を含む`<p>`タグを検索
+- `/ancestor::a`: その祖先の`<a>`タグに移動
+- `[1]`: 最初の要素（一番上＝最新）を取得
+
+**テスト結果**: ✅ 成功
+- ZIPダウンロード: 成功（13:01にダウンロード確認）
+- シナリオ完了: エラーなしで最後まで実行
+
+**作成ファイル**:
+- `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\scenario\４３ETC-実行環境選択可能版-20251227-1ー申請用ファイル作成完成版_fixed_v41.rks`
+
+**学び**:
+1. React SPAサイトのリンクはhref属性を持たないことがある（JSクリックハンドラー使用）
+2. RK10のXPath実装は標準ブラウザと異なる場合があり、`contains(., '.zip')`より`contains(text(), '.zip')/ancestor::a`が安定
+3. 複数マッチする場合は`[1]`で最初の要素を指定する
+
+### [CODE][KAIZEN] シナリオ43 RK10 XPath制限の発見とPlaywright代替
+
+**問題**: v41のXPath `(//p[contains(text(), '.zip')]/ancestor::a)[1]` がPlaywrightでは動作するが、RK10では動作しない
+
+**調査結果（v42-v48）**:
+RK10のXPath実装は標準XPathと大きく異なり、以下の構文が**非対応**:
+| 構文 | 例 | RK10での動作 |
+|------|-----|-------------|
+| `ancestor::` | `/ancestor::a` | ❌ 非対応 |
+| `descendant::` | `//a[descendant::p]` | ❌ 非対応 |
+| `../../..` | `//p/../../../` | ❌ 非対応 |
+| `contains(., ...)` | `contains(., '.zip')` | ❌ 非対応 |
+| CSS Selector | `SyntaxType.CssSelector` | ❌ APIに存在しない |
+
+**テストしたXPath（すべてRK10で失敗）**:
+- v42: `(//a[descendant::p[contains(text(), '.zip')]])[1]`
+- v43: `(//p[contains(text(), '.zip')]/../../..)[1]`
+- v44: CSS Selector（ビルドエラー）
+- v45: `//a[contains(@class, 'sc-gyycJP')]`
+- v46: `//p[contains(text(), '.zip')]`
+- v47: `(//td//a[contains(., '.zip')])[1]`
+- v48: `//a[@class='sc-gyycJP KKYCe'][1]`
+
+**暫定解決策**: Playwrightで直接ダウンロード
+```python
+async with page.expect_download() as download_info:
+    zip_link = page.locator('a.sc-gyycJP').first
+    await zip_link.click()
+download = await download_info.value
+await download.save_as(f'C:/Users/masam/Downloads/{download.suggested_filename}')
+```
+
+**ダウンロード結果**: ✅ 成功
+- ファイル: `C:\Users\masam\Downloads\11278_11278_東海インプル建設㈱_202512.zip`
+- サイズ: 1,756,457 bytes
+- 日時: 2026/01/21 8:22:48
+
+**ZIPファイル手動処理結果**: ✅ 完了
+- ZIP展開: 成功（6ファイル）
+- ローカル作業フォルダへコピー: 成功
+  - `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\work\11278_11278_東海インプル建設㈱_202512`
+- ネットワーク共有（PROD）: 接続不可のため保留
+
+**ファイル一覧**:
+```
+11278_11278_東海インプル建設㈱_202512/
+├── CSV/
+│   ├── 202512-500法人カード別明細11278東海インプル建設㈱.csv (5,945 bytes)
+│   ├── 202512-500法人別行先別明細11278東海インプル建設㈱.csv (68,974 bytes)
+│   └── 202512-500法人利用金額11278東海インプル建設㈱.csv (317 bytes)
+├── PDF/
+│   └── 202512-500法人請求書11278東海インプル建設㈱.pdf (706,232 bytes)
+├── 年間費用使用 ETC カード安全協会のお知らせ-日本情報20260119.pdf (248,747 bytes)
+└── ★ミライ情報館-Vol.130-2026年1月号.pdf (923,866 bytes)
+```
+
+**次のアクション**:
+1. ネットワーク共有が利用可能になったら、`\\192.168.1.251\TIC-mainSV\管理部\40.一般経費用データ\日本情報サービス協同組合\データ` にコピー
+2. Excelへのデータ転記はRK10シナリオで実行（シート「2026.01」の作成が必要）
+3. RK10のXPath制限を考慮した別のダウンロード方法の検討（Python連携など）
+
+**重要な学び**:
+1. **RK10のXPath実装は非標準** - ancestor/descendant軸、相対パス（../../）、contains(., ...)が動作しない
+2. **Playwright + expect_download()** はJavaScript駆動のダウンロードを確実にハンドリングできる
+3. **React SPAサイトのRPA化** はRK10単体では困難な場合があり、Python/Playwright連携が有効
+
+### [PROCESS] シナリオ55 ヒアリング要件確定（吉田さん・瀬戸さん）
+
+**確定した要件**:
+
+| 項目 | 要件 | 備考 |
+|------|------|------|
+| **目的** | 楽楽精算→Excel転記の自動化（15日/25日/末日払い） | 勘定奉行入力前データ生成 |
+| **入力データ** | 楽楽精算CSVデータ（印刷プレビュー→データ抽出に変更） | API契約なし |
+| **マスタ照合** | 支払先→勘定科目の自動判定マスタを作成 | 例: 安城印刷→消耗品費 |
+| **確度による色分け** | 完全一致=黒字、判定不能/新規=**赤字** | 吉田さんが一目で確認箇所を把握 |
+| **原本ファイル維持** | 既存ファイルにシート追加（月次新規作成しない） | ✓現状実装で対応済み |
+| **複数行処理** | 1支払先複数明細→行を分けて転記 | ✓現状実装で対応済み |
+| **出力先変更** | ユニオン共有→**MINISV経理フォルダ** | 具体パス要確認 |
+| **完了通知** | メール等で吉田さんに送付 | 新規実装必要 |
+
+**運用フロー**（確定）:
+1. ロボットがExcel作成・保存
+2. 吉田さんに完了通知（メール等）
+3. 吉田さんが赤字箇所を確認・修正
+4. （将来）確定データ→勘定奉行/銀行振込データ連携
+
+**現状実装との差分**:
+| 機能 | 現状 | 要変更 |
+|------|------|--------|
+| マスタ照合（科目判定） | 支払先マッチングのみ | **★要追加** |
+| 確度による色分け | なし | **★要追加**（赤字/黒字） |
+| 出力先 | ユニオン共有 | **★要変更**（MINISV） |
+| 完了通知 | コンソールのみ | **★要追加**（メール） |
+
+**環境変化の注意点**:
+- **IPアドレス変更予定**: UTM入替（ラディックス担当）でMINISVのIP変更あり
+- シナリオ内の旧IP参照を新IP決定後に修正が必要
+
+---
+
+### [PROCESS] 他ロボット要件概要（ヒアリング）
+
+**No.56: 資金繰り表・当座データ連携**
+- 目的: IB→当座入出金データ→共有エクセル反映
+- 課題: 出力先ExcelがAccess連携（形式崩れ禁止）
+- 対応案: 別ファイル作成→コピペ or 計算式のみコピー
+
+**No.1354: 基幹システムログイン（吉田さん自作）**
+- 現状: RPAより手作業が早く未使用
+- 改善案: デスクトップバッチで裏起動（トリガー実行）
+
+**No.57, 58, 63, 66, 70, 71**:
+- ステータス: 要件定義これから
+- 吉田さんが操作動画撮影→開発者共有フェーズ
+- 推測: 基幹システム仕訳吐き出し、勘定奉行取込関連
+
+### [CODE][KAIZEN] シナリオ43 ConvertExcelToDataTable serializedConfig空JSON化
+- **変更内容**: `ConvertExcelToDataTable` の第2引数（serializedConfig）を空JSON `{}` に変更し、ExternalResources依存を解除
+- **作成ファイル**: `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\scenario\43ETC_fixed_v5_csv_via_excel.rks`
+- **注意点**: RK10の実装により空JSONがデフォルト動作（1行目ヘッダーで全データ読み取り）にならない場合があるため、エラー継続時はRK10 GUIで「表の抽出」ノードを再設定する

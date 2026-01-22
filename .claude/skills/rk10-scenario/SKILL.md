@@ -223,6 +223,11 @@ Keyence.CommentActions.LogAction.OutputUserLog(message);
 **原因:** ダイアログが表示されている
 **解決:** 先にダイアログを処理
 
+### エラー6: ExternalResourceReader.GetResourceText が空
+**症状:** `ConvertExcelToDataTable`で「表の抽出に失敗しました」
+**原因:** `ExternalResourceReader.GetResourceText`の引数をコードで書き換えた
+**解決:** **RK10 GUIで「表の抽出」ノードを再設定する必要あり**（手動修正不可）
+
 ---
 
 ## 5. 設定ファイルパターン
@@ -309,7 +314,127 @@ Keyence.SystemActions.SystemAction.ExecuteApplication(
 
 ---
 
-## 8. 参照
+## 8. 実践パターン集（シナリオ43完成版より抽出）
+
+### 8.1 リトライパターン（ZIP展開/ファイルコピー）
+
+```csharp
+var UnzipOK = false;
+foreach (var カウンター1 in Keyence.Activities.Samples.RepeatExtensions.RepeatCount(10))
+{
+    try
+    {
+        Keyence.FileSystemActions.CompressionAction.UncompressFile(zipPath, destDir, true, "", ShiftJis);
+        UnzipOK = true;
+        break;
+    }
+    catch (System.Exception エラー1) when (エラー1 is not Keyence.Activities.Exceptions.ForceExitException)
+    {
+        Keyence.ThreadingActions.ThreadingAction.Wait(2d);
+    }
+}
+if (Keyence.Activities.Samples.VariableAction.InvertBool(UnzipOK))
+{
+    Keyence.CommentActions.LogAction.OutputUserLog("ZIP展開に10回失敗");
+    return;  // シナリオ終了
+}
+```
+
+**ポイント:**
+- `RepeatCount(N)` でN回ループ
+- 成功時は `break` で抜ける
+- `ForceExitException` は再throw（シナリオ強制終了用）
+- 失敗時は `return` でシナリオ終了
+
+### 8.2 Excel「合計」行検索パターン
+
+```csharp
+// J列で「合計」を検索
+var list2 = Keyence.ExcelActions.ExcelAction.GetMatchValueList(A1, 1, 1, 1, 1, "j:j", "合計", false);
+cellJ = Keyence.ListActions.ListAction.GetItem(list2, 0);  // "$J$123" 形式
+
+// "$J$123" → "123" に変換
+cellJ = Keyence.TextActions.TextAction.ReplaceText(cellJ, "$", false, false, "", false, false);
+var rowStr = Keyence.TextActions.TextAction.ReplaceText(cellJ, "J", false, false, "", false, false);
+foundRow = Keyence.NumericActions.NumericAction.ConvertFromObjectToInteger(rowStr);
+```
+
+### 8.3 部門別金額取得（下から上に走査）
+
+```csharp
+var 金額管理 = -1;  // -1は未取得
+var foundCount = 0;
+var row = foundRow;
+row += -1;
+
+foreach (var loop1 in RepeatCount(50))
+{
+    var rowStr = ConvertFromObjectToText(row);
+    cellJ = Concat("J", rowStr);
+    合計ラベル = GetCellValue(A1, 1, 1, cellJ, String);
+
+    if (CompareString(合計ラベル, "合計", NotEqual, false))
+        break;  // 「合計」以外に到達したら終了
+
+    // 部門名取得
+    cellS = Concat("S", rowStr);
+    部門名 = GetCellValue(A1, 1, 1, cellS, String);
+
+    // 金額取得
+    cellQ = Concat("Q", rowStr);
+    金額str = GetCellValue(A1, 1, 1, cellQ, String);
+    金額str = ReplaceText(金額str, ",", false, false, "", false, false);
+    金額 = ConvertFromObjectToInteger(金額str);
+
+    // 部門別に振り分け
+    if (CompareDouble(金額管理, -1d, Equal) && CompareString(部門名, "管理", Equal, false))
+    {
+        金額管理 = 金額;
+        foundCount += 1;
+    }
+    // ... 他の部門も同様
+
+    if (CompareDouble(foundCount, 5d, Equal))
+        break;  // すべて取得したら終了
+    else
+        row += -1;  // 1行上へ
+}
+```
+
+### 8.4 PDF座標指定テキスト抽出
+
+```csharp
+// ExtractText(pdfPath, pageNum, x, y, width, height)
+var 発行日 = Keyence.PdfActions.PdfActions.ExtractText(pdfPath, 1, 143, 308, 141, 13);
+var 請求金額 = Keyence.PdfActions.PdfActions.ExtractText(pdfPath, 1, 115, 275, 189, 18);
+```
+
+**注意:** 座標はピクセル単位。PDFレイアウト変更時は要修正
+
+### 8.5 HTMLメール送信（ハイパーリンク付き）
+
+```csharp
+Keyence.OutlookActions.OutlookAction.SendHtmlMail(
+    "",                    // 送信者（空=デフォルト）
+    mailAddress,           // 宛先
+    "",                    // CC
+    "",                    // BCC
+    subject,               // 件名
+    attachmentPath,        // 添付ファイル
+    false,                 // 下書き保存
+    new List<HtmlMailBodyContent> {
+        HtmlBodyContentCreator.CreateString("プロセスが完了しました。\n以下リンクからご確認ください"),
+        HtmlBodyContentCreator.CreateHyperlink("楽楽精算　ログイン", "https://...")
+    },
+    ""                     // 署名
+);
+Keyence.OutlookActions.OutlookAction.CloseOutlook();
+```
+
+---
+
+## 9. 参照
 
 - **詳細スキル**: `repo:/external-repos/my-claude-skills/rk10-scenario/skill.md`
 - **各ロボットフォルダ**: `C:\ProgramData\RK10\Robots\`
+- **シナリオ43完成版**: `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\scenario\４３一般経費_日本情報サービス協同組合(ETC)明細の作成_完成版.rks`
