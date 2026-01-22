@@ -1,0 +1,2 @@
+﻿site_key,site_name,base_url,login_type,a11y_grade,recommended_primary,recommended_fallback,stability_notes,last_verified
+eco-serv_web_billing,JAHIC WEB請求サービス (eco-serv),https://rbbrier.eco-serv.jp/etc/mypage/,ID/PW (no MFA observed),A,Playwright,Agent Browser / RK10,"ZIPリンクのAccessible Nameがファイル名(.zip)。download完了保証はPlaywrightが最強。",2026-01-22
