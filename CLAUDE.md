@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+For every project, write a detailed FOR[yourname].md file that explains the whole project in plain language.
+
 ---
 
 ## Canonical rules (Source of Truth)
@@ -80,6 +82,78 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 有休申請の手順を教えて
 締め後に修正したい
 ```
+
+---
+
+### GAS Webapp（SPA）スキル
+
+**場所**: `.claude/skills/gas-webapp/`
+**自動参照**: @.claude/skills/gas-webapp/SKILL.md
+
+**キーワード**: GAS、Google Apps Script、Webアプリ、SPA、clasp、doGet、google.script.run、HtmlService、スプレッドシートDB
+
+**知識範囲**:
+- GAS + HTML SPA構成（単一index.html、インラインCSS/JS）
+- Spreadsheet as DB（SHEETS/HEADERS定義、CRUD helpers）
+- api.gs パターン（clientUserKey、toSerializable_、エラー返却）
+- ハイブリッド認証（Google + localStorage + 復元コード）
+- clasp デプロイ（`-i`必須）
+- 実績: archi-16w トレーニングアプリ（@37バージョン、本番運用中）
+
+---
+
+## 再発防止チェックリスト（2026-02-02 振り返り）
+
+### 1. UI変更は影響範囲を全画面で検証する
+
+**事例**: archi-16w @32 ナビボタンポカヨケ（回答前は非表示）→ Home/中断するボタンまで消えるリグレッション発生 → @34で修正
+
+**ルール**:
+- UI要素の表示/非表示を変更する場合、**その要素が表示される全画面・全状態**を列挙してからコードを書く
+- 特に「条件付き非表示」は、意図しない要素まで巻き込むリスクが高い
+- デプロイ前チェック: 変更した画面だけでなく、隣接画面（前後の遷移先）も必ず確認
+
+### 2. clasp deploy は必ず `-i <deploymentId>` を付ける
+
+**事例**: `-i`なしで`clasp deploy`を実行すると新しいデプロイメントが作成され、URLが変わる（既存ユーザーがアクセスできなくなる）
+
+**ルール**:
+```bash
+# 正しい（既存URLを更新）
+clasp deploy -i AKfycbxVu6IgDAj5lbx9KCVEwsTC-GdG1-H5oYAOotW0x7DdBesM2UrpNkF0KRhliPi0Q-zUcg
+
+# 危険（新URL生成）
+clasp deploy
+```
+
+### 3. OCR修正は必ずフル回帰テストを実行してから適用する
+
+**事例**:
+- Fix 5（OCR confidence閾値でスキップ）→ 他ファイルで金額欠損リグレッション → ロールバック
+- Fix 1（円サフィックス除去）→ Super Safety帳票でリグレッション → 条件追加で修正
+- bbox座標アプローチ → -5件の金額リグレッション → アプローチ自体を断念
+
+**ルール**:
+- OCRパターン追加/変更後、**全テストケース（ALL-N）のスコア**を変更前後で比較する
+- スコアが1件でも悪化したら、原因特定してから適用する（「他は改善したから」で押し通さない）
+- 新パターンは既存パターンを壊さない**追加型**にする（既存ロジックの書き換えは最終手段）
+
+### 4. エラーハンドリングは類似関数と揃える
+
+**事例**: `doStartMock`のsuccessハンドラに`res._error`/`!res.attemptId`のバリデーションがない（`doStartTest`にはある）→ 模試中断→再開でHomeに戻されるバグ（未解決）
+
+**ルール**:
+- 新しいAPI呼び出し関数を書くとき、**同じパターンの既存関数**（doStartTest等）のエラーハンドリングをコピーしてから開始する
+- successハンドラでも「サーバーが論理エラーを返す可能性」を常に想定する
+
+### 5. 「小さく変えて、測って、学んで、また変える」を徹底する
+
+**事例**: 複数の改善を1デプロイにまとめた結果、リグレッション発生時にどの変更が原因か特定しにくい
+
+**ルール**:
+- 1デプロイ = 1変更（可能な限り）
+- 複数変更をまとめる場合、各変更の影響範囲が独立していることを確認する
+- リグレッション発生時は「どの変更が原因か」を最初に切り分ける
 
 ---
 

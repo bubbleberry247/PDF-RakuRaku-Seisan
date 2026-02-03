@@ -43,3 +43,7 @@ tools/_wip/
 docs/screenshots/
 etc_*.png
 tools/realesrgan/
+.codex/
+.gemini/
+.claude/settings.local.json
+.claude/settings.local.json.bak
