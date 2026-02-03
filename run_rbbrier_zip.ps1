@@ -1,0 +1,392 @@
+#requires -Version 5.1
+$ErrorActionPreference = "Stop"
+
+# ========= Config =========
+$AgentCmd  = "C:\ProgramData\RK10\tools\agent-browser\run_agent_browser.cmd"
+$CdpPort   = 9222
+$TargetUrl = "https://rbbrier.eco-serv.jp/etc/mypage/"
+
+# 互換のため残す（URL一致で見つからない場合のみフォールバック）
+$PrimaryTabIndex  = 13
+$FallbackTabIndex = 12
+
+$OutDir = Join-Path "C:\Temp\agent-browser-rk10" (Get-Date -Format "yyyyMMdd_HHmmss")
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+
+$SnapPath          = Join-Path $OutDir "snap.json"
+$SnapIPath         = Join-Path $OutDir "snap_i.txt"
+$SnapAfterPath     = Join-Path $OutDir "snap_after.json"
+$ShotLog           = Join-Path $OutDir "screenshot.log"
+$ShotFailLog       = Join-Path $OutDir "screenshot_fail.log"
+$DebugChunkPath    = Join-Path $OutDir "debug_chunks.txt"
+$TabListBeforePath = Join-Path $OutDir "tab_list_before.txt"
+$TabListAfterPath  = Join-Path $OutDir "tab_list_after_open.txt"
+$ZipCandidatesPath = Join-Path $OutDir "zip_candidates.txt"
+
+Write-Host "LogDir: $OutDir"
+
+if (-not (Test-Path -LiteralPath $AgentCmd)) {
+  throw "agent-browser not found: $AgentCmd"
+}
+
+function Invoke-Agent {
+  param(
+    [Parameter(Mandatory=$true)][string[]]$Args,
+    [int]$Retry = 3,
+    [int]$SleepSec = 2
+  )
+
+  $last = $null
+  for ($i=1; $i -le $Retry; $i++) {
+    $out = & $AgentCmd --cdp $CdpPort @Args 2>&1
+    $code = $LASTEXITCODE
+
+    if ($code -eq 0) { return $out }
+
+    $last = ($out -join "`n")
+    Write-Host "WARN: agent-browser failed (try $i/$Retry). exit=$code"
+    Write-Host $last
+
+    Start-Sleep -Seconds $SleepSec
+  }
+
+  throw ("agent-browser failed after retries.`nArgs={0}`n{1}" -f ($Args -join " "), $last)
+}
+
+function Take-SnapshotJson {
+  param([Parameter(Mandatory=$true)][string]$Path)
+  $out = Invoke-Agent -Args @("snapshot","--json") -Retry 3 -SleepSec 2
+  $out | Set-Content -Encoding utf8 -LiteralPath $Path
+  if (-not (Test-Path -LiteralPath $Path) -or (Get-Item -LiteralPath $Path).Length -lt 10) {
+    throw "snapshot json seems empty: $Path"
+  }
+}
+
+function Take-SnapshotInteractiveText {
+  param([Parameter(Mandatory=$true)][string]$Path)
+
+  # 改修: snapshot -i を保存してref抽出の一次ソースにする
+  $out = Invoke-Agent -Args @("snapshot","-i") -Retry 3 -SleepSec 2
+  $out | Set-Content -Encoding utf8 -LiteralPath $Path
+  if (-not (Test-Path -LiteralPath $Path) -or (Get-Item -LiteralPath $Path).Length -lt 10) {
+    throw "snapshot -i seems empty: $Path"
+  }
+}
+
+function Extract-RefFromSnapshotText {
+  param(
+    [Parameter(Mandatory=$true)][string]$Path,
+    [Parameter(Mandatory=$true)][string[]]$Patterns
+  )
+
+  $lines = Get-Content -LiteralPath $Path
+  foreach ($pat in $Patterns) {
+    foreach ($line in $lines) {
+      if ($line -match $pat) {
+        $m = [regex]::Match($line, '(@[A-Za-z0-9_\-]{2,})')
+        if ($m.Success) { return $m.Groups[1].Value }
+      }
+    }
+  }
+  return $null
+}
+
+function Take-ScreenshotFull {
+  param([Parameter(Mandatory=$true)][string]$LogPath)
+  $out = Invoke-Agent -Args @("screenshot","--full") -Retry 2 -SleepSec 2
+  $out | Set-Content -Encoding utf8 -LiteralPath $LogPath
+  $pngLine = ($out | Select-String -Pattern '\.png' | Select-Object -First 1).Line
+  if ($pngLine) { Write-Host "Screenshot: $pngLine" }
+}
+
+function Extract-RefNearMatch {
+  param(
+    [Parameter(Mandatory=$true)][string]$JsonPath,
+    [Parameter(Mandatory=$true)][string[]]$Patterns
+  )
+
+  $text = Get-Content -Raw -LiteralPath $JsonPath
+
+  foreach ($pat in $Patterns) {
+    $ms = [regex]::Matches($text, $pat, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    foreach ($m in $ms) {
+      $start = [Math]::Max(0, $m.Index - 800)
+      $len   = [Math]::Min($text.Length - $start, 1600)
+      $chunk = $text.Substring($start, $len)
+
+      Add-Content -Encoding utf8 -LiteralPath $DebugChunkPath -Value ("---- pattern: {0} ----`n{1}`n" -f $pat, $chunk)
+
+      $r = [regex]::Match($chunk, '"ref"\s*:\s*"(@[^"]+)"', 'IgnoreCase')
+      if ($r.Success) { return $r.Groups[1].Value }
+
+      $r = [regex]::Match($chunk, '"ref"\s*:\s*"([^"]+)"', 'IgnoreCase')
+      if ($r.Success -and $r.Groups[1].Value -notmatch '^\s*$') {
+        $v = $r.Groups[1].Value
+        if ($v.StartsWith("@")) { return $v }
+        return "@$v"
+      }
+
+      $r = [regex]::Match($chunk, '(@[A-Za-z0-9_\-]{3,})')
+      if ($r.Success) { return $r.Groups[1].Value }
+    }
+  }
+  return $null
+}
+
+function Normalize-Url {
+  param([Parameter(Mandatory=$true)][string]$Url)
+  $u = $Url.Trim()
+  try {
+    $uri = [Uri]$u
+    return $uri.GetLeftPart([System.UriPartial]::Path).TrimEnd('/')
+  } catch {
+    return $u.TrimEnd('/')
+  }
+}
+
+function Get-Tabs {
+  param([string]$SavePath)
+
+  $out = Invoke-Agent -Args @("tab","list") -Retry 2 -SleepSec 1
+  if ($SavePath) { $out | Set-Content -Encoding utf8 -LiteralPath $SavePath }
+
+  $tabs = @()
+  foreach ($line in $out) {
+    if ($line -match '^\s*(?:->\s*)?\[(\d+)\]\s+(.*?)\s-\s(https?://\S+)\s*$') {
+      $tabs += [pscustomobject]@{
+        Index = [int]$Matches[1]
+        Title = $Matches[2]
+        Url   = $Matches[3]
+      }
+    }
+  }
+  return $tabs
+}
+
+function Get-TabIndexByUrl {
+  param([Parameter(Mandatory=$true)][string]$Url)
+
+  $tabs = Get-Tabs
+  if ($tabs.Count -eq 0) { return $null }
+
+  $targetNorm = Normalize-Url -Url $Url
+  $targetHost = $null
+  try { $targetHost = ([Uri]$Url).Host } catch { $targetHost = $null }
+
+  # 1) 正規化した完全一致
+  $m1 = $tabs | Where-Object { (Normalize-Url -Url $_.Url) -eq $targetNorm } | Select-Object -First 1
+  if ($m1) { return $m1.Index }
+
+  # 2) 前方一致（リダイレクト等）
+  $m2 = $tabs | Where-Object { (Normalize-Url -Url $_.Url) -like "$targetNorm*" } | Sort-Object Index -Descending | Select-Object -First 1
+  if ($m2) { return $m2.Index }
+
+  # 3) ドメイン一致（最後に開いたもの＝index最大）
+  if ($targetHost) {
+    $m3 = $tabs | Where-Object { $_.Url -like "*$targetHost*" } | Sort-Object Index -Descending | Select-Object -First 1
+    if ($m3) { return $m3.Index }
+  }
+
+  return $null
+}
+
+function Get-ZipCandidates {
+  param([Parameter(Mandatory=$true)][string]$JsonPath)
+
+  $text = Get-Content -Raw -LiteralPath $JsonPath
+  $matches = [regex]::Matches($text, '\.zip', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+
+  $cands = @()
+  foreach ($m in $matches) {
+    $start = [Math]::Max(0, $m.Index - 1200)
+    $len   = [Math]::Min($text.Length - $start, 2400)
+    $chunk = $text.Substring($start, $len)
+
+    # ref抽出（複数形式に対応）
+    $ref = $null
+    $r = [regex]::Match($chunk, '"ref"\s*:\s*"(@?[^\\"]+)"', 'IgnoreCase')
+    if ($r.Success) {
+      $ref = $r.Groups[1].Value
+      if (-not $ref.StartsWith("@")) { $ref = "@$ref" }
+    } else {
+      $r = [regex]::Match($chunk, '(@[A-Za-z0-9_\-]{3,})')
+      if ($r.Success) { $ref = $r.Groups[1].Value }
+    }
+    if (-not $ref) { continue }
+
+    # yyyymm（例: 202512）を抽出できれば選択に使う
+    $ym = $null
+    $ymMatch = [regex]::Match($chunk, '(\d{6})(?=\.zip)', 'IgnoreCase')
+    if ($ymMatch.Success) { $ym = [int]$ymMatch.Groups[1].Value }
+
+    # 人間が追えるスニペット（デバッグ用）
+    $snipStart = [Math]::Max(0, ($m.Index - 80) - $start)
+    $snipLen   = [Math]::Min($chunk.Length - $snipStart, 180)
+    $snip = $chunk.Substring($snipStart, $snipLen).Replace("`r"," ").Replace("`n"," ")
+
+    $cands += [pscustomobject]@{ Ref = $ref; Yyyymm = $ym; Snippet = $snip }
+  }
+
+  # ref重複を潰し、yyyymm最大を優先
+  $dedup = $cands | Group-Object Ref | ForEach-Object {
+    $_.Group | Sort-Object @{Expression={ if ($_.Yyyymm) { $_.Yyyymm } else { -1 } }} -Descending | Select-Object -First 1
+  }
+
+  return $dedup
+}
+
+# ========= Credentials (A->B fallback) =========
+$loginId = $env:ETC_ID
+if ([string]::IsNullOrWhiteSpace($loginId)) { $loginId = "11278_11278" }
+
+$passwordPlain = $env:ETC_PW
+if ([string]::IsNullOrWhiteSpace($passwordPlain)) {
+  Write-Host "ETC_PW is not set. Switching to prompt input."
+  $sec = Read-Host "ETC password" -AsSecureString
+  $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
+  try { $passwordPlain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
+  finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+}
+if ([string]::IsNullOrWhiteSpace($passwordPlain)) { throw "Password is empty." }
+
+# ========= Step 1: switch/open target tab =========
+Write-Host "[1/7] Locate target tab by URL: $TargetUrl"
+$tabsBefore = Get-Tabs -SavePath $TabListBeforePath
+
+$idx = Get-TabIndexByUrl -Url $TargetUrl
+if ($null -eq $idx) {
+  Write-Host "Target tab not found. Opening new tab..."
+  Invoke-Agent -Args @("tab","new",$TargetUrl) -Retry 2 -SleepSec 1 | Out-Null
+  Start-Sleep -Seconds 1
+  $tabsAfter = Get-Tabs -SavePath $TabListAfterPath
+  $idx = Get-TabIndexByUrl -Url $TargetUrl
+}
+
+if ($null -eq $idx) {
+  Write-Host "WARN: URL match failed. Fallback to tab index $PrimaryTabIndex -> $FallbackTabIndex"
+  $tabOut = Invoke-Agent -Args @("tab", "$PrimaryTabIndex") -Retry 2 -SleepSec 1
+  if (($tabOut -join "`n") -match "not found") {
+    $tabOut = Invoke-Agent -Args @("tab", "$FallbackTabIndex") -Retry 2 -SleepSec 1
+  }
+} else {
+  Write-Host "Switching to tab index: $idx"
+  Invoke-Agent -Args @("tab", "$idx") -Retry 2 -SleepSec 1 | Out-Null
+}
+Write-Host "OK: tab ready"
+Write-Host "Wait: page load (networkidle)"
+Invoke-Agent -Args @("wait","--load","networkidle") -Retry 3 -SleepSec 2 | Out-Null
+Start-Sleep -Seconds 1
+
+# ========= Step 2: screenshot =========
+Write-Host "[2/7] Take screenshot (full)"
+Take-ScreenshotFull -LogPath $ShotLog
+
+# ========= Step 3: snapshot + find login refs =========
+$loginIdPatterns = @(
+  'ログイン\s*ID','ユーザー\s*ID','会員番号','11278_11278',
+  '"name"\s*:\s*"(login|user|userid|user_id|member|account)"',
+  '"id"\s*:\s*"(login|user|userid|user_id|member|account)"'
+)
+$passwordPatterns = @(
+  '?????','"type"\s*:\s*"password"','password','passwd'
+)
+$loginButtonPatterns = @(
+  'ログイン','sign\s*in','login','"type"\s*:\s*"submit"'
+)
+
+$loginIdPatternsInteractive = @("ログインID","ユーザーID","会員番号","11278_11278")
+$passwordPatternsInteractive = @("?????")
+$loginButtonPatternsInteractive = @("ログイン")
+
+Write-Host "[3/7] Snapshot + extract refs (retry up to 3)"
+$loginIdRef = $null; $passwordRef = $null; $loginBtnRef = $null
+
+for ($i=1; $i -le 3; $i++) {
+  Write-Host "  try $i/3: snapshot"
+  try {
+    Take-SnapshotJson -Path $SnapPath
+    Take-SnapshotInteractiveText -Path $SnapIPath
+  } catch {
+    Write-Host "WARN: snapshot failed: $($_.Exception.Message)"
+    Start-Sleep -Seconds 2
+    continue
+  }
+
+  # 改修: snapshot -i を優先し、取れない場合のみJSONへフォールバック
+  $loginIdRef  = Extract-RefFromSnapshotText -Path $SnapIPath -Patterns $loginIdPatternsInteractive
+  $passwordRef = Extract-RefFromSnapshotText -Path $SnapIPath -Patterns $passwordPatternsInteractive
+  $loginBtnRef = Extract-RefFromSnapshotText -Path $SnapIPath -Patterns $loginButtonPatternsInteractive
+
+  if (-not $loginIdRef)  { $loginIdRef = Extract-RefNearMatch -JsonPath $SnapPath -Patterns $loginIdPatterns }
+  if (-not $passwordRef) { $passwordRef = Extract-RefNearMatch -JsonPath $SnapPath -Patterns $passwordPatterns }
+  if (-not $loginBtnRef) { $loginBtnRef = Extract-RefNearMatch -JsonPath $SnapPath -Patterns $loginButtonPatterns }
+
+  if ($loginIdRef -and $passwordRef -and $loginBtnRef) { break }
+  Write-Host "WARN: missing refs id=$loginIdRef pw=$passwordRef btn=$loginBtnRef"
+  Start-Sleep -Seconds 2
+}
+
+if (-not ($loginIdRef -and $passwordRef -and $loginBtnRef)) {
+  Write-Host "NG: failed to extract login refs. Saving failure screenshot."
+  Take-ScreenshotFull -LogPath $ShotFailLog
+  throw "Login ref extraction failed. See: $ShotFailLog and $DebugChunkPath"
+}
+
+Write-Host "OK: login refs id=$loginIdRef pw=$passwordRef btn=$loginBtnRef"
+
+# ========= Step 4: fill & click =========
+Write-Host "[4/7] Fill login form + click"
+Invoke-Agent -Args @("fill",  $loginIdRef,  $loginId)       -Retry 3 -SleepSec 1 | Out-Null
+Invoke-Agent -Args @("fill",  $passwordRef, $passwordPlain) -Retry 3 -SleepSec 1 | Out-Null
+Invoke-Agent -Args @("click", $loginBtnRef)                -Retry 3 -SleepSec 1 | Out-Null
+Write-Host "OK: login submitted"
+
+Start-Sleep -Seconds 3
+
+# ========= Step 5: snapshot after login + find zip ref =========
+Write-Host "[5/7] Snapshot after login + extract zip ref (retry up to 3)"
+$zipRef = $null
+
+for ($i=1; $i -le 3; $i++) {
+  Write-Host "  try $i/3: snapshot after login"
+  try {
+    Take-SnapshotJson -Path $SnapAfterPath
+  } catch {
+    Write-Host "WARN: snapshot failed: $($_.Exception.Message)"
+    Start-Sleep -Seconds 2
+    continue
+  }
+
+  $cands = Get-ZipCandidates -JsonPath $SnapAfterPath
+  $cands | ForEach-Object {
+    $ymText = if ($_.Yyyymm) { $_.Yyyymm } else { "" }
+    ("Ref={0}`tYyyymm={1}`tSnippet={2}" -f $_.Ref, $ymText, $_.Snippet) | Out-File -Append -Encoding utf8 -FilePath $ZipCandidatesPath
+  }
+
+  if ($cands.Count -eq 0) {
+    Write-Host "WARN: zip candidates not found yet"
+    Start-Sleep -Seconds 2
+    continue
+  }
+
+  $best = $cands | Sort-Object @{Expression={ if ($_.Yyyymm) { $_.Yyyymm } else { -1 } }} -Descending | Select-Object -First 1
+  $zipRef = $best.Ref
+  break
+}
+
+if (-not $zipRef) {
+  Write-Host "NG: failed to select zip ref. Saving failure screenshot."
+  Take-ScreenshotFull -LogPath $ShotFailLog
+  throw "ZIP ref extraction failed. See: $ShotFailLog, $ZipCandidatesPath and $DebugChunkPath"
+}
+
+Write-Host "OK: zip ref=$zipRef"
+
+# ========= Step 6: click zip =========
+Write-Host "[6/7] Click ZIP link"
+Invoke-Agent -Args @("click", $zipRef) -Retry 3 -SleepSec 2 | Out-Null
+Write-Host "OK: ZIP click executed (download behavior depends on browser settings)."
+
+# ========= Step 7: done =========
+Write-Host "[7/7] Done"
+$passwordPlain = $null
