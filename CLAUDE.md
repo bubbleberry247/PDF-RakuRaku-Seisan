@@ -6,6 +6,17 @@ For every project, write a detailed FOR[yourname].md file that explains the whol
 
 ---
 
+## 憲法（Constitution）— 全ての判断に優先する原則
+
+### 業界標準リサーチ原則
+**問題に対する業界標準のアプローチを調査し、それを参考に独自のアプローチを導き出す。**
+
+- 設計判断・技術選定・実装パターンの決定前に、まず業界がどう解いているかを調べる
+- 調査結果をそのままコピーするのではなく、自分たちの文脈（規模・頻度・制約）に合わせて適用する
+- 「なぜこのアプローチか」を業界標準との比較で説明できる状態にする
+
+---
+
 ## Canonical rules (Source of Truth)
 
 @AGENTS.md
