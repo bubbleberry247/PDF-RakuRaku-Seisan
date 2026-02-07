@@ -61,12 +61,44 @@ For every project, write a detailed FOR[yourname].md file that explains the whol
 
 ---
 
+### シナリオ55（振込Excel転記）スキル
+
+**場所**: `.claude/skills/scenario-55/`
+**自動参照**: @.claude/skills/scenario-55/SKILL.md
+
+**キーワード**: シナリオ55、振込、Excel転記、楽楽精算、支払依頼、総合振込、勘定奉行、支払伝票
+
+**知識範囲**:
+- 楽楽精算→Excel転記の業務ルール（15日/25日/末日、承認ステータス、支払方法）
+- 3層データ判定（Entry/Ops/RPA）
+- Excel構造（2行1セット、ブロック境界検出）
+- テンプレートマスタ設計と科目推定
+- 検証結果（R7.10: I列94.8%, コードバグ0）
+
+---
+
 ### PDF OCRスキル
 
 **場所**: `.claude/skills/pdf-ocr/`
 **自動参照**: @.claude/skills/pdf-ocr/SKILL.md
 
 **キーワード**: PDF、OCR、テキスト抽出、請求書、領収書、回転補正、傾き補正
+
+---
+
+### Video2PDD（PAD録画→PDD）スキル
+
+**場所**: `.claude/skills/video2pdd/`
+**自動参照**: @.claude/skills/video2pdd/SKILL.md
+
+**キーワード**: Video2PDD、PAD、Power Automate Desktop、Robin、PDD、プロセス設計書、録画、書き起こし
+
+**知識範囲**:
+- PAD Free版のRobinスクリプト取得方法（コピペ手順）
+- Robin→event_log→Excel パイプライン（4フェーズ）
+- ルールベース日本語テンプレート辞書の拡張
+- Gap検出（ambiguous_element, coordinate_only_click等）
+- PDD Excel 4シート出力（概要フロー/詳細手順/未解決項目/メタデータ）
 
 ---
 

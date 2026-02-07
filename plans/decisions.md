@@ -4037,6 +4037,61 @@ known_vendor_keywords = [
 #### 5. 振込手数料 → **すべて当方負担（統一）**
 - 2026年1月から社内規定により「先方負担」判定は不要
 - RPAでの振込手数料負担区分の振り分け判定は**不要**
+
+---
+
+## 2026-02-07
+
+### [PROCESS][CONFIG] PAD（Power Automate Desktop）ハイブリッド採用決定
+
+**決定**: PAD + Python のハイブリッド構成を採用する
+
+**根拠（3視点の検証結果）**:
+- **技術検証**: PADレコーダーで楽楽精算ログインを録画→Robinスクリプト取得。Video2PDD v2スキーマとの適合率85%を確認
+- **経理視点**: 無料で始められる、ビジュアルフローで経理担当者もメンテ可能、IT依頼待ち削減
+- **情シス視点**: Windows 11標準搭載、M365統合、ガバナンス機能(DLP/CoE)あり。ただしシャドーIT対策必要
+- **開発保守視点**: レコーダー→即フロー、引き継ぎ改善。Python連携はIronPython制約あり→DOSコマンド経由で既存.py呼び出し
+
+**役割分担**:
+| 用途 | ツール |
+|------|--------|
+| 新規シナリオ（単純Web/Excel操作） | PAD |
+| PDD自動生成の入力 | PAD（Robinスクリプト） |
+| 複雑処理（OCR、大量データ、Playwright） | Python（既存資産維持） |
+| 既存RK10シナリオ | 段階的にPAD移行（P1から順に） |
+
+**コスト**: 無料版で開始。スケジュール実行が必要になったらPremium（¥2,248/user/月）
+
+**移行ロードマップ**:
+- Phase 0（1ヶ月）: PoC — 簡単なシナリオ1-2本をPADで再構築
+- Phase 1（2-3ヶ月）: 新規はPAD優先、既存RK10維持
+- Phase 2（3-6ヶ月）: 簡単な既存シナリオをPAD移行（経理担当者が再録画）
+- Phase 3（6-12ヶ月）: 複雑シナリオはPAD+Python連携で再構築
+
+**変更ファイル**: `plans/decisions.md`（本記録）
+
+### [TOOL] Video2PDD v2 — PAD入力で実装進行
+
+**決定**: Video2PDD v2プランを承認し、Impl-Phase 1（Robinパーサー + Schema v2）から実装開始
+
+**プランファイル**: `C:\Users\masam\.claude\plans\wobbly-growing-brooks.md`
+**テストデータ**: `c:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\tools\video2pdd\test_data\rakuraku_login.robin`
+
+**残課題**:
+- ControlRepository JSONの完全版再取得（PADから直接エクスポート）
+- テキスト入力値キャプチャの再テスト（ログインID等が記録されなかった件）
+
+### [KNOWLEDGE] PAD Python連携の制約
+
+- PAD内蔵Python = IronPythonベース（Pandas/NumPy使用不可）
+- 既存Pythonツール呼び出し: `DOSコマンドの実行` → `cmd /c python script.py` で対応
+- PADレコーダーは座標依存の傾向あり → キー操作推奨、Wait挿入必須
+
+### [KNOWLEDGE] バックグラウンドサブエージェント出力問題
+
+- `Task` toolの `run_in_background: true` で起動したサブエージェントが `completed` と報告するが、output fileが空になる事象が繰り返し発生
+- Agent Teamの in-process エージェントもコンテキスト圧縮後にプロセス消滅
+- **回避策**: フォアグラウンドサブエージェント（`run_in_background: false`）を使用するか、メイン側で直接Web検索を実行する
 - 楽楽精算アップロード時も当方負担をデフォルト選択
 
 ### [SPEC][PROCESS] シナリオ55 按分処理と空行不足の運用方針
@@ -5022,3 +5077,222 @@ I列不一致13件: 都度振込除外5件 + 手動追加1件(Sabastian) + デ�
 | `C:\ProgramData\RK10\Robots\55\tools\launcher.py` | H3: docstring修正 |
 | `.claude/rules/codex-delegation.md` | gpt-5.3-codex |
 | `.claude/settings.json` | effortLevel, allowedTools |
+
+## 2026-02-06 (session 2: video2pdd設計)
+
+### [CONFIG] effortLevel "high" 固定 + Agent Teams有効化
+- `.claude/settings.json`: `"effortLevel": "high"` に変更（medium時にAGENTS.mdルール照合をスキップする傾向があったため）
+- `.claude/settings.json`: `"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"}` 追加
+
+### [PROCESS] Codex事前相談の必須化 + Plan品質プリフライト
+- Plan作成**前に**Codexに設計相談を委託する（事後批評ではなく事前相談）
+- Plan作成時に既存ルールの参照を強制するプリフライト追加:
+  1. [憲法] 業界標準を調査したか？
+  2. [品質] 品質分類は？
+  3. [TPS] ポカヨケ・アンドン・自働化の設計は？
+  4. [性弱説] ①忘れる②見ない③後回し④飛ばす への対策は？
+- 事例: video2pdd Plan — Codex事後批評で致命的欠陥6件発覚、Plan全面改訂が必要になった
+
+### [PROCESS] モデル役割分担（確定）
+- **要件定義**: Opus 4.6（大量コンテキスト + ユーザー対話 + ドメイン知識）
+- **設計**: Codex 5.3（具体的な実装仕様の精度が高い）
+- **オーケストレーション**: Opus 4.6（ランタイム + ルール照合 + TPS監査）
+- **コード実装**: Codex 5.3（コード特化）
+- **レビュー/監査**: Opus 4.6（障害モード分析 + 性弱説チェック）
+- **ROI画像読み取り等**: Gemini（構造化ログの穴埋め専用）
+
+### [PROCESS] Agent Teams vs Subagents 使い分け
+- **Subagent**: 結果だけ欲しい焦点を絞ったタスク（Codex相談、Geminiリサーチ、コード検索）
+- **Agent Team**: 複数観点の議論・協力が必要な複雑な作業（設計レビュー、デバッグ仮説競合、並列実装）
+- **遷移ポイント**: Subagentが互いに通信する必要がある時 → Agent Team
+- **Codex連携**: Agent TeamメイトがBash経由でcodex exec呼び出し可能（ただしステートレス1問1答）
+- **制約**: Codexはチーム議論に「参加」はできない（Agent TeamはClaude同士のみ）
+
+### [KNOWLEDGE] Video2PDD — Steps Recorder + OBS + Gemini ハイブリッド設計（検討中）
+
+**背景**: 業務フロー動画からPDD（Process Design Document）を自動作成するツール
+- 従来の「Gemini動画丸投げ」アプローチは品質不足（70%目標=NG、100%必須）
+- ユーザーがSteps Recorder + OBS + Geminiハイブリッドを発案・PoC実装済み
+
+**既存実装（PoC）**:
+- `c:\Users\masam\Desktop\KeyenceRK\StepsRecorder_Test\hybrid_integrate.py`（5フェーズ、~360行）
+- Phase 1: Steps Recorder MHT/XML解析 → 構造化イベントログ
+- Phase 2: Gemini補完必要ステップの自動判定（4ルール）
+- Phase 3: OBS動画からFFmpegフレーム抽出
+- Phase 4: Gemini APIで外科的補完
+- Phase 5: 統合レポート生成（★ハードコード — 汎用化が最大の課題）
+- 出力サンプル: `業務フロー_支払依頼確認.md`（33ステップ、8フェーズ、高品質）
+
+**設計方針（Opus + Codex協議、最終案は検討中）**:
+
+P0（必須）:
+1. SSOT = event_log.json（LLMの出力をSSOTにしない）
+2. レビューゲート: [?]残存→暫定版明記 + 通知 + SLA + エスカレーション
+3. アンドン完全版: 失敗→メール通知→12hリマインド→24hエスカレーション
+4. 自働化（復旧パス付き）: 失敗→停止 + SSOTに進捗記録 + 再実行で同地点から再開
+
+P1（精度・効率）:
+5. 同期自動化: pHash/SSIMでオフセット推定（手動OBS_START_TIME廃止）
+6. Gemini外科手術: ROI切り抜き + JSON固定応答 + gemini_audit.jsonl + PIIマスク
+7. 回帰テスト: Phase 1-3は決定的テスト、Phase 4はGeminiキャッシュ活用
+
+B（PDD表）= LLM不要、SSOTの機械的変換のみ（推測禁止の核心）
+A（概要フロー）= LLM使用可、ただし必ずStep xx参照付き
+
+Excel出力（最終形）: PDD_Steps / Flow_Summary / Ambiguities / Run_Metadata の4シート
+
+**重要な教訓（このセッションで得たもの）**:
+- Codexは「何を作るか」に強い。Opusは「何が壊れるか」「人がサボったらどうなるか」に強い
+- effortLevel "medium"では既存ルール（TPS/性弱説）の照合がスキップされる — 性弱説はAIにも適用される
+- 「暫定版」ラベルだけでは性弱説②見ない+③後回しに対応できない。通知+SLA+エスカレーションとセットで初めて機能する
+
+### 変更ファイル
+| ファイル | 変更内容 |
+|---------|---------|
+| `.claude/settings.json` | effortLevel high, Agent Teams有効化, allowedTools追加 |
+| `AGENTS.md` | Project Memory 3項目追記（Codex事前相談/effortLevel/Planプリフライト） |
+| `tools/prompts/pdd_extraction.txt` | 新規: Gemini PDD抽出プロンプト |
+| `tools/prompts/pdd_extraction_with_audio.txt` | 新規: 音声付きPDD抽出プロンプト |
+
+## 2026-02-06 (session 3: claude-mem導入 + Video2PDD整理)
+
+### [CONFIG] claude-mem プラグイン導入完了
+- プラグイン: `claude-mem@thedotmack` v9.0.17
+- 機能: セッション間の自動記憶引き継ぎ（observation即時保存 + セッションサマリー + コンテキスト注入）
+- DB: `C:\Users\masam\.claude-mem\claude-mem.db`（SQLite + FTS5テキスト検索）
+- ワーカー: port 37777, hooks経由で自動起動
+
+### [KNOWLEDGE] claude-mem Windows環境の注意点
+- **Bun PATHの問題**: `bun-runner.js`が`spawn('bun')`をshell=falseで呼ぶため、`.cmd`shimを発見できない
+  - 対処: `bun.exe`を`C:\Users\masam\AppData\Roaming\npm\bun.exe`にコピー
+  - bunアップデート時は再コピーが必要
+- **ベクトル検索無効**: ChromaDBがWindows上でconsole popup問題を起こすため無効化（FTS5のみ）
+- **orphan reaper**: PowerShellの`\$_`エスケープ問題で失敗するが非致命的
+
+### [PROCESS] claude-memの記憶引き継ぎ仕組み
+- **PostToolUse hook**: ツール使用ごとにobservationを**即時DB保存**（突然終了でも残る）
+- **Stop hook**: セッション正常終了時にサマリー生成（突然終了時は失われる）
+- **SessionStart hook**: 過去のobservation+サマリーを自動注入（手動操作不要）
+- 突然終了→新セッション開始でもobservationは引き継がれる（サマリーのみ欠損）
+
+### [PROCESS] Video2PDD — プラン段階の明確化
+- ユーザー明示指示: 「書き起こしのツールはまだプラン中だよ」
+- Plan file存在: `C:\Users\masam\.claude\plans\wobbly-growing-brooks.md`
+- 先行実装コード存在（Phase 1-3）: `tools/video2pdd/` — プラン承認前に作成された
+- 次のアクション: プラン承認 → Impl-Phase 1開始
+
+### 変更ファイル
+| ファイル | 変更内容 |
+|---------|---------|
+| `plans/handoff.md` | claude-memセクション追加、Video2PDDステータス明確化 |
+| `plans/decisions.md` | 本セクション追記 |
+
+## 2026-02-07 (Session 2)
+
+### [CODE] Video2PDD v2 — Impl-Phase 1 完了
+- **event_log.py**: v1→v2 全面書き換え。PSRフィールド削除、PADフィールド追加（raw_line, action_category, target_window, target_element, click_type, input_value, url）。4フェーズ構成（robin_parse, screenshots, flow_summary, excel_generation）
+- **phase1_robin.py**: 新規作成。Robin script parser + Gap検出（ambiguous_element, coordinate_only_click, duplicate_action, complex_key_combo）
+- **main.py**: v2書き換え。`--robin-file` + `--control-repo`（optional）+ `--obs-video`（optional）。`--resume` 対応。
+- テスト結果（rakuraku_login.robin）: 15ステップ全抽出、confirmed 7 / provisional 8 / duplicates 2 / unresolved 10
+
+### [CODE] Video2PDD v1ファイル — 廃止対象
+- `phase1_psr.py`, `phase2_judge.py`, `phase3_frames.py` は v1（PSR入力）用。main.py v2からimportされない。
+- _wipへ退避予定。
+
+### 変更ファイル
+| ファイル | 変更内容 |
+|---------|---------|
+| `tools/video2pdd/event_log.py` | v2スキーマ全面書き換え（285行） |
+| `tools/video2pdd/phase1_robin.py` | 新規作成（Robin parser + Gap検出、310行） |
+| `tools/video2pdd/main.py` | v2 CLI書き換え（--robin-file、265行） |
+| `plans/handoff.md` | Impl-Phase 1完了記録、次アクション更新 |
+| `plans/decisions.md` | 本セクション追記 |
+
+### [PROCESS] Video2PDD v2 — アーキテクチャ決定（Codex 5.3相談結果）
+- **OBS動画**: 不要。Robin scriptにタイムスタンプがなく同期不可。v1設計の遺物。
+- **ControlRepository**: 不要。PAD Free版にエクスポート機能なし。Robin単独で85%+のデータ取得可。
+- **スクリーンショット**: 納品必須ではない（作業参考用のみ）。MVP=空欄、将来=Evidence Run。
+- **日本語手順文**: ルールベーステンプレート辞書 = 正本（SSOT）。LLM出力はSSOTにしない。
+- **Draft/Release 2モード**: Draft=unresolved残存OK＋通知、Release=unresolved残存で停止。
+- **MVPパイプライン**: Robin → Parse(Phase1済) → Normalize(Phase2) → Describe(Phase2) → Excel(Phase3: 4シート)
+- **Excel 4シート構成**: ①概要フロー ②詳細手順（PDD表B） ③未解決項目 ④実行メタデータ
+- **品質分類**: 既存業務PDD作成の置換 → 100%品質必須（ただしMVPは段階的にカバー率を上げる）
+
+### [CODE] Video2PDD v2 — MVP全フェーズ実装完了
+- **phase2_describe.py**: 新規作成（Normalize + Describe、310行）
+  - ルールベーステンプレ辞書（ELEMENT_TYPE_JA / CLICK_TYPE_JA / KEY_DISPLAY）
+  - 要素エイリアス: PAD raw要素名→日本語（"Input submit 'ログイン'" → "「ログイン」ボタン"）
+  - ウィンドウエイリアス: PADウィンドウ名→日本語（"Web Page 'h...'" → "楽楽精算Webページ"）
+  - キー記述: SendKeys形式→可読形式（"{LMenu}({Tab}{Tab})" → "Alt + Tab × 2"）
+  - 重複マージ: duplicate_count + merged_into フィールド追加
+  - フローフェーズ: ウィンドウ切替ベースの自動グループ化
+- **phase3_excel.py**: 新規作成（Excel出力、280行）
+  - 4シート: 概要フロー / 詳細手順 / 未解決項目 / 実行メタデータ
+  - スタイル: ヘッダー青、provisional黄色、merged灰色
+- **main.py**: Phase 2-3統合（import追加、パイプライン更新）
+- テスト結果: 15ステップ→日本語記述全生成、重複2件マージ、8フェーズ分割、Excel 4シート出力
+- サンプル出力: `C:\Users\masam\Desktop\PDD_sample_output.xlsx`
+
+### 変更ファイル
+| ファイル | 変更内容 |
+|---------|---------|
+| `tools/video2pdd/phase2_describe.py` | 新規作成（Normalize + Describe、310行） |
+| `tools/video2pdd/phase3_excel.py` | 新規作成（Excel 4シート出力、280行） |
+| `tools/video2pdd/main.py` | Phase 2-3統合 |
+| `plans/handoff.md` | MVP完了記録 |
+| `plans/decisions.md` | 本セクション追記 |
+
+---
+
+## 2026-02-07
+
+### [KAIZEN] シナリオ55 会社コード300フィルタ欠落問題 — 原因究明と対策
+
+**事象**: R7.11末日のExcel転記テストで原本（41件/3,857,220円）に対しロボットが353件/15,587,719円を出力（約4倍）
+
+**根本原因（5 Whys）**:
+1. 入力CSVに全会社データが含まれていた
+2. 既存大量CSV(12,505件)を支払日だけで分割、会社コードフィルタなし
+3. CSVに会社コード列が存在しない（楽楽精算Web検索時にのみサーバー側でフィルタ）
+4. `--input-csv`モードと`test_past_month.py`にフィルタチェックがない
+5. テスト結果と原本の自動照合・異常値検知の仕組みがなかった
+
+**性弱説パターン**: ①忘れる（出自情報なし） + ④飛ばす（フィルタ横展開なし） + ②見ない（異常値検知なし）
+
+**実施済み対策（test_past_month.py ポカヨケ3点）**:
+1. 会社コード列チェック（WARNING表示）
+2. 支払方法内訳表示（透明性）
+3. レコード数150件上限で自動停止（`--force`で回避可）
+
+**正しいテスト方法**: `scrape_past_month.py 2025-11 --company-code 300` で再スクレイピング（既存CSVからの推定は不可能）
+
+**今後の検討事項**:
+- CSVに `_company_code` 列を追加（データ出自の保持）
+- `main.py --input-csv` 使用時の会社コード検証
+- テスト結果と原本の金額自動比較
+
+### 変更ファイル
+| ファイル | 変更内容 |
+|---------|---------|
+| `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\tools\test_past_month.py` | ポカヨケ3点追加（会社コード列チェック、支払方法内訳、レコード数上限） |
+
+---
+
+### [PROCESS] decisions.md 凍結宣言（2026-02-07）
+
+**このファイルは5,278行で凍結。以降の新規追記はしない。**
+
+3-tier context systemに移行:
+- **Tier 1 (Always loaded)**: `plans/handoff.md` — プロジェクト現状サマリー
+- **Tier 2 (Skill)**: `.claude/skills/{name}/SKILL.md` — 再利用可能なドメイン知識
+- **Tier 3 (On-demand)**: `plans/decisions/projects/{project}.md` — プロジェクト別決定ログ（append-only）
+
+新規決定の追記先:
+| プロジェクト | ファイル |
+|-------------|---------|
+| シナリオ55 | `plans/decisions/projects/scenario-55-furikomi.md` |
+| Video2PDD | `plans/decisions/projects/video2pdd.md` |
+| archi-16w | `plans/decisions/projects/archi-16w.md` |
+| 横断的 | `plans/decisions/projects/global.md` |
+
+移行理由: decisions.md 5,278行がセッション開始時のコンテキストを圧迫し、重要な検証結果や決定が埋もれて忘却される問題が発生。

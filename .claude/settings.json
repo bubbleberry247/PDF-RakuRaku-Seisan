@@ -1,24 +1,21 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "effortLevel": "medium",
+  "effortLevel": "high",
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "allowedTools": [
     "Read",
     "Edit",
     "Write",
     "Glob",
     "Grep",
-    "Bash(git *)",
-    "Bash(python *)",
-    "Bash(uv *)",
-    "Bash(codex *)",
-    "Bash(gemini *)",
-    "Bash(ls *)",
-    "Bash(mkdir *)",
-    "Bash(cp *)",
-    "Bash(gh *)",
+    "Bash(*)",
     "WebFetch",
     "WebSearch",
     "Task",
-    "NotebookEdit"
+    "NotebookEdit",
+    "mcp__puppeteer__*",
+    "mcp__browser-tools__*"
   ]
 }

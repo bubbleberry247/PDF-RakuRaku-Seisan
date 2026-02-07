@@ -1,0 +1,32 @@
+# レコーダーを使用した自動生成アクションの開始
+@@source: 'Recorder'
+UIAutomation.PressButton Button: appmask['TaskBar']['Button \'Microsoft Edge 固定済み\'']
+@@source: 'Recorder'
+UIAutomation.Click.Click Element: appmask['Window \'Genspark -  ...  - Microsoft​ Edge\'']['List Item \'RK\''] ClickType: UIAutomation.ClickType.LeftClick OffsetX: 3 OffsetY: -11 MousePositionRelativeToElement: UIAutomation.RectangleEdgePoint.BottomCenter
+@@source: 'Recorder'
+UIAutomation.Click.Click Element: appmask['Window \'これ使いたい - PDF-RakuRaku-Seisan - Visual Studio Code\'']['List Item \'「保存」 をクリック\''] ClickType: UIAutomation.ClickType.LeftClick OffsetX: -247 OffsetY: -9 MousePositionRelativeToElement: UIAutomation.RectangleEdgePoint.BottomCenter
+@@source: 'Recorder'
+UIAutomation.Click.Click Element: appmask['Window \'Genspark -  ...  - Microsoft​ Edge\'']['Document \'Genspark - あなたのオールインワンAIワークスペース\''] ClickType: UIAutomation.ClickType.LeftClick
+@@source: 'Recorder'
+WebAutomation.LaunchEdge.AttachToEdgeByUrl TabUrl: 'https://rsatonality.rakurakuseisan.jp/rHqny3DOsIa/' AttachTimeout: 10 TargetDesktop: $'''{\"DisplayName\":\"ローカル コンピューター\",\"Route\":{\"ServerType\":\"Local\",\"ServerAddress\":\"\"},\"DesktopType\":\"local\"}''' BrowserInstance=> Browser
+@@source: 'Recorder'
+WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['Web Page \'h ... qny3DOsIa/\'']['Div \'ログインID パスワード  ...  Rights Reserved.\''] ClickType: WebAutomation.ClickType.DoubleClick MouseClick: True
+@@source: 'Recorder'
+WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['Web Page \'h ... qny3DOsIa/\'']['Div \'ログインID パスワード  ...  Rights Reserved.\''] ClickType: WebAutomation.ClickType.DoubleClick MouseClick: True
+@@source: 'Recorder'
+WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['Web Page \'h ... qny3DOsIa/\'']['Div \'ログインID パスワード  ...  Rights Reserved.\''] ClickType: WebAutomation.ClickType.DoubleClick MouseClick: True
+@@source: 'Recorder'
+WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['Web Page \'h ... qny3DOsIa/\'']['Div \'ログインID\''] ClickType: WebAutomation.ClickType.LeftClick MouseClick: True
+@@source: 'Recorder'
+WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['Web Page \'h ... qny3DOsIa/\'']['Input text \'loginId\''] ClickType: WebAutomation.ClickType.LeftClick MouseClick: True
+@@source: 'Recorder'
+UIAutomation.Click.Click Element: appmask['Window \'Genspark -  ...  - Microsoft​ Edge\'']['Group \'30094\''] ClickType: UIAutomation.ClickType.LeftClick OffsetX: 61 OffsetY: 15 MousePositionRelativeToElement: UIAutomation.RectangleEdgePoint.TopLeft
+@@source: 'Recorder'
+WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['Web Page \'h ... qny3DOsIa/\'']['Div \'ログインID パスワード\''] ClickType: WebAutomation.ClickType.LeftClick MouseClick: True
+@@source: 'Recorder'
+WebAutomation.PressButton.PressButton BrowserInstance: Browser Control: appmask['Web Page \'h ... qny3DOsIa/\'']['Input submit \'ログイン\'']
+@@source: 'Recorder'
+WAIT 2
+@@source: 'Recorder'
+MouseAndKeyboard.SendKeys.FocusAndSendKeysByInstanceOrHandle TextToSend: '{LMenu}({Tab}{Tab})' WindowInstance: Browser
+# レコーダーを使用した自動生成アクションの終了

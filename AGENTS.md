@@ -187,17 +187,30 @@ Plan → Do（委託/実装） → Check（検証） → Act（改善/記録）
 
 | ユーザー発言 | 実施すること |
 |---|---|
-| 「できた」/「記憶して」 | `plans/decisions.md` に追記（決定・制約・知見を短く） |
+| 「できた」/「記憶して」 | 該当プロジェクトの `plans/decisions/projects/{project}.md` に追記 |
 | 「MDに書いて」 | **本ファイル（AGENTS.md）の `## Project Memory` に追記**（恒常ルールのみ） |
 | （ctx>=70%など） | `plans/handoff.md` を短く更新（Done/Next/Risks/検証） |
 
-### 新セッション開始時の必須アクション（最初に実施）
-1. まず `plans/decisions.md` を読む（最優先）
-2. 直近の決定を3〜7行で要約してから作業開始
-3. `plans/handoff.md` があれば読んで「いまどこまで」を把握する
-4. 不明点があれば、実装に入る前に確認する
+**決定ログの追記先（プロジェクト別）**:
+| プロジェクト | ファイル |
+|-------------|---------|
+| シナリオ55 | `plans/decisions/projects/scenario-55-furikomi.md` |
+| Video2PDD | `plans/decisions/projects/video2pdd.md` |
+| archi-16w | `plans/decisions/projects/archi-16w.md` |
+| 横断的（CONFIG/PROCESS等） | `plans/decisions/projects/global.md` |
+| その他新規 | `plans/decisions/projects/{project-name}.md` を新規作成 |
 
-### decisions.md の追記ルール
+**注意**: legacy `plans/decisions.md` は凍結済み（5,278行）。新規追記禁止。
+
+**再利用可能な知識がスキル化できる場合**:
+- per-project decisions から `.claude/skills/{name}/SKILL.md` へ昇格させる
+
+### 新セッション開始時の必須アクション（最初に実施）
+1. `plans/handoff.md` を読む（Tier 1: 現状サマリー）
+2. 作業対象のプロジェクトが明確なら、該当の `plans/decisions/projects/*.md` を読む（Tier 3）
+3. 不明点があれば、実装に入る前に確認する
+
+### per-project decisions の追記ルール
 - **append-only**（追記が基本、過去は書き換えない）
 - 追記は「今日の日付のセクション」に入れる。無ければ作る
 - 変更・撤回は「新しい決定として追記し、Supersedes参照」
@@ -418,3 +431,23 @@ Plan → Do（委託/実装） → Check（検証） → Act（改善/記録）
     - traceback全文を含める
   - **HTMLメール**でハイパーリンクをクリック可能にする（Outlook COM: `mail.HTMLBody`）
   - これは性弱説「②見ない→届ける」「①忘れる→通知が来る」の実装パターン
+
+### 2026-02-06
+- **Plan作成時のCodex事前相談（必須）**
+  - Plan作成**前に**Codexに設計相談を委託する（Plan完成後の批評ではなく、**一緒に設計する**）
+  - 順序: ①要件理解 → ②Codexに設計相談 → ③AGENTS.md照合 → ④Plan作成
+  - **事後批評は「やり直し」を生む。事前相談は「最初から正しい設計」を生む**
+  - 事例: video2pdd Plan — Codex事後批評で致命的欠陥6件発覚、Plan全面改訂が必要になった
+
+- **effortLevel "high" 固定（設計品質の底上げ）**
+  - settings.json: `"effortLevel": "high"`
+  - 理由: medium時にAGENTS.md既存ルール（ポカヨケ/性弱説/業界標準リサーチ）の照合をスキップする傾向が確認された
+  - **ルールが存在しても、推論の深さが足りなければ参照されない** — 性弱説はAIにも適用される
+
+- **Plan品質プリフライト（既存ルールの参照を強制）**
+  - Plan作成時に以下を必ず確認（新ルールではなく、既存ルールの参照トリガー）:
+    1. [憲法] 業界標準を調査したか？
+    2. [品質] 品質分類は？（既存業務置換=100% / 新規=段階的 / PoC=昇格条件付き）
+    3. [TPS] ポカヨケ・アンドン・自働化の設計は？
+    4. [性弱説] ①忘れる②見ない③後回し④飛ばす への対策は？
+  - **これは新ルールではない。既にある4つのルールを「飛ばせない」仕組み（性弱説④）**

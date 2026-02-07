@@ -1,7 +1,9 @@
 # .claude/hooks/sessionstart_load_decisions.ps1
 # Purpose:
-# - SessionStart時に plans/decisions.md と plans/handoff.md を追加コンテキストとして注入する
-# - ファイル肥大化時は末尾のみ表示してコンテキスト消費を抑える
+# - SessionStart時に plans/handoff.md を追加コンテキストとして注入する
+# - 3-tier context system: Tier1=handoff(always), Tier2=skills(keyword), Tier3=decisions(on-demand)
+# - Legacy decisions.md (5,278 lines) is NO LONGER loaded at session start
+# - Per-project decisions are in plans/decisions/projects/*.md (read on demand)
 
 $raw = [Console]::In.ReadToEnd()
 
@@ -25,8 +27,7 @@ if (-not $projectDir) {
     $projectDir = (Get-Location).Path
 }
 
-$decisionsPath = Join-Path $projectDir "plans\decisions.md"
-$handoffPath   = Join-Path $projectDir "plans\handoff.md"
+$handoffPath = Join-Path $projectDir "plans\handoff.md"
 
 function Write-FileWithGuard {
     param(
@@ -57,8 +58,10 @@ function Write-FileWithGuard {
 }
 
 Write-Output "=== Session Handoff (sid=$sid8) ==="
-Write-Output "Must read first: plans/decisions.md"
+Write-Output "Tier 1: CLAUDE.md + AGENTS.md loaded automatically by Claude Code"
+Write-Output "Tier 2: Skills loaded by keyword match (.claude/skills/)"
+Write-Output "Tier 3: Per-project decisions in plans/decisions/projects/ (read on demand)"
 Write-Output ""
 
-Write-FileWithGuard -Path $decisionsPath -Label "decisions.md" -MaxBytes 20000 -TailLines 200
-Write-FileWithGuard -Path $handoffPath   -Label "handoff.md"   -MaxBytes 8000  -TailLines 120
+# Only load handoff (compact current status)
+Write-FileWithGuard -Path $handoffPath -Label "handoff.md" -MaxBytes 8000 -TailLines 120
