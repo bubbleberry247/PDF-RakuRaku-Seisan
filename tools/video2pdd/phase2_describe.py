@@ -23,6 +23,7 @@ from .event_log import (
     PHASE_SCREENSHOTS,
     create_flow_phase,
     is_phase_completed,
+    is_video_pipeline,
     mark_phase_completed,
     mark_phase_failed,
     mark_phase_started,
@@ -476,6 +477,84 @@ def build_flow_phases(event_log: dict) -> None:
 
 
 # ------------------------------------------------------------------ #
+#  Video pipeline: description generation
+# ------------------------------------------------------------------ #
+
+# Action type → Japanese description template (video pipeline)
+VIDEO_ACTION_JA: dict[str, str] = {
+    "Click": "{target}を{click_ja}する",
+    "DoubleClick": "{target}をダブルクリックする",
+    "RightClick": "{target}を右クリックする",
+    "Input": "{target}に「{value}」と入力する",
+    "Select": "{target}で「{value}」を選択する",
+    "Navigate": "{value} に移動する",
+    "Scroll": "画面をスクロールする",
+    "Wait": "{value}秒待機する",
+    "KeyShortcut": "キーボードで {value} を送信する",
+    "FileOpen": "ファイル「{value}」を開く",
+    "FileSave": "ファイルを保存する",
+    "DragDrop": "{target}をドラッグ＆ドロップする",
+    "SwitchWindow": "{target}に切り替える",
+}
+
+
+def _build_description_video(
+    step: dict,
+    prev_window: str | None,
+) -> str:
+    """Generate Japanese PDD description for video pipeline steps."""
+    action = step.get("action_type", "")
+    target = step.get("target_element", "")
+    value = step.get("input_value", "") or ""
+    window = step.get("target_window", "")
+    click_ja = "クリック"
+
+    # Window context prefix (only on change)
+    prefix = ""
+    if window and window != prev_window:
+        prefix = f"{window}で、"
+
+    template = VIDEO_ACTION_JA.get(action, "{target}に対して操作する")
+    desc = template.format(
+        target=target,
+        value=value,
+        click_ja=click_ja,
+    )
+
+    return f"{prefix}{desc}"
+
+
+def normalize_video_steps(event_log: dict) -> None:
+    """Normalize video pipeline steps with descriptions and aliases.
+
+    Video steps already have target_window and target_element from Gemini.
+    This adds element_alias, window_alias, and description fields.
+    """
+    steps = event_log.get("steps", [])
+    if not steps:
+        return
+
+    prev_window: str | None = None
+
+    for step in steps:
+        target = step.get("target_element", "")
+        window = step.get("target_window", "")
+
+        # For video pipeline, element_alias and window_alias are simpler
+        step["element_alias"] = target
+        step["window_alias"] = window
+
+        # Generate description
+        step["description"] = _build_description_video(step, prev_window)
+
+        if window:
+            prev_window = window
+
+    # Mark consecutive duplicates
+    _mark_duplicates(steps)
+
+
+# ------------------------------------------------------------------ #
 #  Phase runner
 # ------------------------------------------------------------------ #
 
@@ -503,8 +582,14 @@ def run_phase2(event_log: dict) -> dict[str, Any]:
     mark_phase_started(event_log, PHASE_FLOW_SUMMARY)
 
     try:
-        normalize_steps(event_log)
-        build_flow_phases(event_log)
+        if is_video_pipeline(event_log):
+            normalize_video_steps(event_log)
+            # Video pipeline: use Gemini-provided flow_phases if present
+            if not event_log.get("flow_phases"):
+                build_flow_phases(event_log)
+        else:
+            normalize_steps(event_log)
+            build_flow_phases(event_log)
         mark_phase_completed(event_log, PHASE_FLOW_SUMMARY)
 
         steps = event_log.get("steps", [])

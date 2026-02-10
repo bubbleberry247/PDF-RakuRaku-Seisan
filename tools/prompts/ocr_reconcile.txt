@@ -1,0 +1,40 @@
+You are verifying data extracted from a Japanese invoice/receipt.
+
+Two extraction methods produced different results for the same document.
+Determine which value is correct for each disagreeing field by examining the image.
+
+METHOD A (Regex-based OCR extraction):
+{regex_result}
+
+METHOD B (LLM multimodal extraction):
+{llm_result}
+
+DISAGREEING FIELDS:
+{disagreements}
+
+For each disagreeing field, examine the document image and determine the correct value.
+
+OUTPUT FORMAT: Valid JSON only (no markdown fences):
+
+{
+  "vendor_name": "correct value",
+  "issue_date": "YYYYMMDD",
+  "amount": 12345,
+  "invoice_number": "T1234567890123 or empty string",
+  "corrections": [
+    {
+      "field": "field_name",
+      "chosen": "A or B",
+      "reason": "Brief explanation"
+    }
+  ]
+}
+
+RULES:
+- Only include fields that had disagreements.
+- For each correction, explain WHY you chose A or B based on what you see in the image.
+- If neither A nor B looks correct, provide your own extraction from the image.
+- Amount must be an integer (no commas, no decimal).
+- Date must be YYYYMMDD format.
+
+Output valid JSON only.

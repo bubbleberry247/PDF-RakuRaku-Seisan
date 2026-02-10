@@ -1,5 +1,11 @@
 """
-event_log.py v2 - SSOT (Single Source of Truth) for Video2PDD pipeline.
+event_log.py v3 - SSOT (Single Source of Truth) for Video2PDD pipeline.
+
+v3 changes: Video file as input (Gemini multimodal analysis).
+- Added: timestamp, app_type, confidence, selector_hint to steps
+- Added: video_file input support alongside robin_script
+- Added: phase1_video_analysis, phase5_code_generation phases
+- v2 (Robin) input remains fully compatible
 
 v2 changes: PAD Robin script as primary input (PSR deprecated).
 - Removed: sync section, psr_zip input, needs_gemini/gemini_query/gemini_result/coords
@@ -19,31 +25,43 @@ from pathlib import Path
 from typing import Any
 
 
-TOOL_VERSION = "video2pdd-v2.0.0"
+TOOL_VERSION = "video2pdd-v3.0.0"
 
 # Verification statuses
 VERIFIED_CONFIRMED = "confirmed"
 VERIFIED_PROVISIONAL = "provisional"
 VERIFIED_PENDING = "pending_review"
 
-# Unresolved categories (PAD-specific)
+# Unresolved categories
 CATEGORY_KEYBOARD_COMPLEX = "keyboard_complex"
 CATEGORY_ELEMENT_AMBIGUOUS = "element_ambiguous"
 CATEGORY_GEMINI_ERROR = "gemini_error"
+CATEGORY_LOW_CONFIDENCE = "low_confidence"
 CATEGORY_OTHER = "other"
+
+# App types (for code generation target framework)
+APP_TYPE_WEB = "web"
+APP_TYPE_DESKTOP = "desktop"
+APP_TYPE_UNKNOWN = "unknown"
 
 # Review states
 REVIEW_PENDING = "pending_review"
 REVIEW_REVIEWED = "reviewed"
 REVIEW_APPROVED = "approved"
 
-# Phase names
+# Phase names (Robin pipeline)
 PHASE_ROBIN_PARSE = "phase1_robin_parse"
 PHASE_SCREENSHOTS = "phase2_screenshots"
 PHASE_FLOW_SUMMARY = "phase3_flow_summary"
 PHASE_EXCEL_GEN = "phase4_excel_generation"
 
-ALL_PHASES = [PHASE_ROBIN_PARSE, PHASE_SCREENSHOTS, PHASE_FLOW_SUMMARY, PHASE_EXCEL_GEN]
+# Phase names (Video pipeline)
+PHASE_VIDEO_ANALYSIS = "phase1_video_analysis"
+PHASE_CODE_GEN = "phase5_code_generation"
+
+ALL_PHASES_ROBIN = [PHASE_ROBIN_PARSE, PHASE_SCREENSHOTS, PHASE_FLOW_SUMMARY, PHASE_EXCEL_GEN]
+ALL_PHASES_VIDEO = [PHASE_VIDEO_ANALYSIS, PHASE_FLOW_SUMMARY, PHASE_EXCEL_GEN, PHASE_CODE_GEN]
+ALL_PHASES = ALL_PHASES_ROBIN  # Default for backward compatibility
 
 
 def _sha256_file(path: str, max_bytes: int = 10 * 1024 * 1024) -> str:
@@ -92,6 +110,33 @@ def create_run_metadata(
     }
 
 
+def create_run_metadata_video(
+    video_file: str,
+    output_dir: str,
+    with_audio: bool = False,
+) -> dict[str, Any]:
+    """Create run_metadata section for v3 (video input)."""
+    input_files: dict[str, Any] = {
+        "video_file": str(Path(video_file).resolve()),
+        "video_file_sha256": _sha256_file(video_file),
+        "with_audio": with_audio,
+        "robin_script": None,
+        "robin_script_sha256": None,
+        "control_repository": None,
+        "obs_video": None,
+        "obs_video_sha256": None,
+    }
+    return {
+        "run_id": _generate_run_id(),
+        "created_at": _now_iso(),
+        "tool_version": TOOL_VERSION,
+        "input_files": input_files,
+        "output_dir": str(Path(output_dir).resolve()),
+        "user": os.environ.get("USERNAME", os.environ.get("USER", "unknown")),
+        "hostname": platform.node(),
+    }
+
+
 def create_step(
     num: str,
     raw_line: str,
@@ -103,7 +148,7 @@ def create_step(
     input_value: str | None = None,
     url: str | None = None,
 ) -> dict[str, Any]:
-    """Create a v2 step entry."""
+    """Create a v2 step entry (Robin pipeline)."""
     return {
         "num": num.zfill(2),
         "raw_line": raw_line,
@@ -114,12 +159,56 @@ def create_step(
         "click_type": click_type,
         "input_value": input_value,
         "url": url,
+        "timestamp": None,
+        "app_type": None,
+        "confidence": None,
+        "selector_hint": None,
         "screenshot_path": None,
         "obs_frame_path": None,
         "gap_flags": [],
         "gap_notes": "",
         "verification_status": VERIFIED_PENDING,
         "notes": "",
+    }
+
+
+def create_step_video(
+    num: int,
+    timestamp: str,
+    application: str,
+    app_type: str,
+    action_type: str,
+    target: str,
+    value: str | None = None,
+    result: str | None = None,
+    confidence: float = 1.0,
+    selector_hint: str | None = None,
+    notes: str = "",
+) -> dict[str, Any]:
+    """Create a v3 step entry (video pipeline)."""
+    return {
+        "num": str(num).zfill(2),
+        "raw_line": f"[{timestamp}] {application}: {action_type} {target}",
+        "action_category": app_type,
+        "action_type": action_type,
+        "target_window": application,
+        "target_element": target,
+        "click_type": "LeftClick" if action_type == "Click" else None,
+        "input_value": value,
+        "url": value if action_type == "Navigate" else None,
+        "timestamp": timestamp,
+        "app_type": app_type,
+        "confidence": confidence,
+        "selector_hint": selector_hint,
+        "screenshot_path": None,
+        "obs_frame_path": None,
+        "gap_flags": [],
+        "gap_notes": "",
+        "verification_status": VERIFIED_CONFIRMED if confidence >= 0.9
+        else VERIFIED_PROVISIONAL if confidence >= 0.7
+        else VERIFIED_PENDING,
+        "result": result,
+        "notes": notes,
     }
 
 
@@ -186,7 +275,7 @@ def create_event_log(
     control_repository: str | None = None,
     obs_video: str | None = None,
 ) -> dict[str, Any]:
-    """Create a complete v2 event_log structure."""
+    """Create a complete v2 event_log structure (Robin pipeline)."""
     return {
         "run_metadata": create_run_metadata(
             robin_script, output_dir, control_repository, obs_video,
@@ -195,6 +284,28 @@ def create_event_log(
         "flow_phases": [],
         "unresolved_items": [],
         "phase_status": create_phase_status(),
+        "review_status": create_review_status(),
+    }
+
+
+def create_event_log_video(
+    video_file: str,
+    output_dir: str,
+    with_audio: bool = False,
+) -> dict[str, Any]:
+    """Create a complete v3 event_log structure (video pipeline)."""
+    phase_status = {
+        p: {"completed": False, "completed_at": None, "error": None}
+        for p in ALL_PHASES_VIDEO
+    }
+    return {
+        "run_metadata": create_run_metadata_video(
+            video_file, output_dir, with_audio,
+        ),
+        "steps": [],
+        "flow_phases": [],
+        "unresolved_items": [],
+        "phase_status": phase_status,
         "review_status": create_review_status(),
     }
 
@@ -262,7 +373,7 @@ def load_event_log(path: str) -> dict[str, Any]:
 
 
 def validate_event_log(event_log: dict) -> list[str]:
-    """Validate v2 event_log structure. Returns list of errors (empty = valid)."""
+    """Validate v2/v3 event_log structure. Returns list of errors (empty = valid)."""
     errors: list[str] = []
     required_sections = [
         "run_metadata", "steps", "flow_phases",
@@ -278,7 +389,15 @@ def validate_event_log(event_log: dict) -> list[str]:
             errors.append(f"Missing run_metadata.{field}")
 
     inp = rm.get("input_files", {})
-    if "robin_script" not in inp:
-        errors.append("Missing run_metadata.input_files.robin_script")
+    has_robin = inp.get("robin_script") is not None
+    has_video = inp.get("video_file") is not None
+    if not has_robin and not has_video:
+        errors.append("Missing input: need robin_script or video_file")
 
     return errors
+
+
+def is_video_pipeline(event_log: dict) -> bool:
+    """Check if this event_log uses the video pipeline."""
+    inp = event_log.get("run_metadata", {}).get("input_files", {})
+    return inp.get("video_file") is not None

@@ -49,6 +49,13 @@ try:
 except ImportError:
     ADOBE_OCR_AVAILABLE = False
 
+# Gemini マルチモーダルOCR検証（LayerX方式: OCRテキスト+画像→LLM）
+try:
+    from pdf_ocr_gemini import GeminiOCRValidator
+    GEMINI_OCR_AVAILABLE = True
+except ImportError:
+    GEMINI_OCR_AVAILABLE = False
+
 
 # ===========================================
 # 設定値
@@ -69,6 +76,11 @@ SCORE_WEIGHTS = {
     'vendor_exists': 0.20,      # 取引先あり（0.15→0.20に増加）
     'invoice_valid': 0.15,      # 登録番号あり（0.10→0.15に増加）
 }
+
+# LLM マルチモーダル検証設定（LayerX方式）
+LLM_ENABLED = True              # Gemini検証ON/OFF
+LLM_TRIGGER_MODE = "low_confidence"  # "low_confidence" | "always" | "never"
+LLM_MERGE_STRATEGY = "fill_empty"    # "fill_empty" = LLMは空フィールドのみ補完
 
 # 極端な傾き閾値
 EXTREME_SKEW_THRESHOLD = 25.0  # これ以上の傾きは2回前処理を適用
@@ -567,19 +579,121 @@ class SmartOCRProcessor:
             # 3. 信頼度判定
             result.confidence = self.evaluate_confidence(ocr_result)
 
-            # 4. 低信頼度判定 → Adobe PDF Servicesへフォールバック
+            # 4. LLM検証 or フォールバック判定
+            needs_enhancement = (
+                result.confidence < CONFIDENCE_THRESHOLD
+                or LLM_TRIGGER_MODE == "always"
+            )
+
+            # 4a. Geminiマルチモーダル検証（LayerX方式: 画像+OCRテキスト→LLM）
+            if needs_enhancement and LLM_ENABLED and GEMINI_OCR_AVAILABLE and LLM_TRIGGER_MODE != "never":
+                self.logger.info(
+                    f"Geminiマルチモーダル検証開始（信頼度={result.confidence:.2f}, "
+                    f"trigger={LLM_TRIGGER_MODE}）"
+                )
+                try:
+                    gemini_validator = GeminiOCRValidator()
+                    llm_result = gemini_validator.validate(
+                        pdf_path=ocr_target,
+                        ocr_text=result.raw_text,
+                    )
+
+                    # regex結果をdict化（比較用）
+                    regex_fields = {
+                        "vendor_name": result.vendor_name,
+                        "issue_date": result.issue_date,
+                        "amount": result.amount,
+                        "invoice_number": result.invoice_number,
+                    }
+
+                    # マージ戦略: fill_empty = LLMは空フィールドのみ補完
+                    merged = False
+                    if LLM_MERGE_STRATEGY == "fill_empty":
+                        if not result.vendor_name and llm_result.get("vendor_name"):
+                            result.vendor_name = llm_result["vendor_name"]
+                            merged = True
+                        if not result.issue_date and llm_result.get("issue_date"):
+                            result.issue_date = llm_result["issue_date"]
+                            merged = True
+                        if not result.amount and llm_result.get("amount"):
+                            result.amount = llm_result["amount"]
+                            merged = True
+                        if not result.invoice_number and llm_result.get("invoice_number"):
+                            result.invoice_number = llm_result["invoice_number"]
+                            merged = True
+                        if not result.document_type and llm_result.get("document_type"):
+                            result.document_type = llm_result["document_type"]
+                            merged = True
+                        if not result.description and llm_result.get("description"):
+                            result.description = llm_result["description"]
+                            merged = True
+                    elif LLM_MERGE_STRATEGY == "llm_preferred":
+                        # LLM結果を優先（非空のもののみ）
+                        for fld in ["vendor_name", "issue_date", "amount", "invoice_number",
+                                     "document_type", "description"]:
+                            llm_val = llm_result.get(fld)
+                            if llm_val:
+                                setattr(result, fld, llm_val)
+                                merged = True
+
+                    if merged:
+                        # 再スコアリング
+                        result.confidence = self.evaluate_confidence(result)
+                        result.preprocess_info["ocr_engine"] = "yomitoku+gemini"
+                        self.logger.info(
+                            f"Gemini補完後: 信頼度={result.confidence:.2f}, "
+                            f"vendor={result.vendor_name}, amount={result.amount}"
+                        )
+
+                    # 差分照合: regexとLLMが両方値を持つが異なる場合
+                    has_disagreement = False
+                    for fld in ["vendor_name", "issue_date", "amount", "invoice_number"]:
+                        rv = regex_fields.get(fld, "")
+                        lv = llm_result.get(fld, "")
+                        if rv and lv and str(rv) != str(lv):
+                            has_disagreement = True
+                            break
+
+                    if has_disagreement:
+                        self.logger.info("regex vs LLM 不一致検出 → 差分照合実行")
+                        try:
+                            reconciled = gemini_validator.reconcile(
+                                pdf_path=ocr_target,
+                                regex_result=regex_fields,
+                                llm_result=llm_result,
+                            )
+                            # 照合結果を適用
+                            for fld in ["vendor_name", "issue_date", "amount", "invoice_number"]:
+                                rec_val = reconciled.get(fld)
+                                if rec_val:
+                                    setattr(result, fld, rec_val)
+                            result.confidence = self.evaluate_confidence(result)
+                            result.preprocess_info["ocr_engine"] = "yomitoku+gemini+reconciled"
+                            self.logger.info(
+                                f"差分照合後: 信頼度={result.confidence:.2f}"
+                            )
+                        except Exception as e:
+                            self.logger.warning(f"差分照合失敗（regex結果を維持）: {e}")
+
+                    # LLM reasoning をログに記録（アンドン: 判断根拠の可視化）
+                    reasoning = llm_result.get("reasoning", "")
+                    if reasoning:
+                        self.logger.info(f"Gemini reasoning: {reasoning}")
+
+                except Exception as e:
+                    self.logger.warning(f"Geminiマルチモーダル検証失敗（regex結果を維持）: {e}")
+
+            # 4b. まだ低信頼度ならAdobe PDF Servicesへフォールバック（3次）
             if result.confidence < CONFIDENCE_THRESHOLD:
-                # Adobe PDF Services OCRでリトライ
                 if ADOBE_OCR_AVAILABLE:
                     self.logger.info(
-                        f"YomiToku低信頼度({result.confidence:.2f}) → Adobe PDF Servicesで再試行"
+                        f"低信頼度継続({result.confidence:.2f}) → Adobe PDF Servicesで再試行"
                     )
                     try:
                         adobe_result = self._fallback_to_adobe_ocr(pdf_path)
                         if adobe_result:
                             adobe_confidence = self.evaluate_confidence(adobe_result)
                             if adobe_confidence > result.confidence:
-                                # Adobe結果の方が良い場合は採用
                                 result.vendor_name = adobe_result.vendor_name or result.vendor_name
                                 result.issue_date = adobe_result.issue_date or result.issue_date
                                 result.amount = adobe_result.amount or result.amount
@@ -587,16 +701,12 @@ class SmartOCRProcessor:
                                 result.document_type = adobe_result.document_type or result.document_type
                                 result.description = adobe_result.description or result.description
                                 result.confidence = adobe_confidence
-                                # ocr_engine情報はpreprocess_infoに保存
                                 result.preprocess_info["ocr_engine"] = "adobe_pdf_services"
                                 self.logger.info(
                                     f"Adobe PDF Services採用: 信頼度={adobe_confidence:.2f}"
                                 )
                     except Exception as e:
                         self.logger.warning(f"Adobe PDF Servicesフォールバック失敗: {e}")
-
-                # 再評価（信頼度チェック後に品質ゲートへ）
-                pass  # 品質ゲートは下で統一評価
 
             # 5. 品質ゲート判定（必須項目の存在+形式妥当性チェック）
             result.quality_gate = check_quality_gate(

@@ -20,6 +20,7 @@ from openpyxl.utils import get_column_letter
 from .event_log import (
     PHASE_EXCEL_GEN,
     is_phase_completed,
+    is_video_pipeline,
     mark_phase_completed,
     mark_phase_failed,
     mark_phase_started,
@@ -38,6 +39,7 @@ _BODY_FONT = Font(name="Yu Gothic UI", size=10)
 _BODY_ALIGN = Alignment(vertical="top", wrap_text=True)
 
 _PROVISIONAL_FILL = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+_LOW_CONF_FILL = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
 _MERGED_FONT = Font(name="Yu Gothic UI", size=10, color="999999")
 
 _THIN_BORDER = Border(
@@ -129,10 +131,21 @@ def _write_steps_sheet(ws, event_log: dict) -> None:
     """Write Sheet 2: 詳細手順."""
     ws.title = "詳細手順"
 
-    headers = [
-        "No", "操作内容", "対象ウィンドウ", "対象要素",
-        "入力値", "URL", "スクリーンショット", "備考", "ステータス",
-    ]
+    is_video = is_video_pipeline(event_log)
+
+    if is_video:
+        headers = [
+            "No", "時刻", "操作内容", "対象ウィンドウ", "対象要素",
+            "入力値", "URL", "信頼度", "備考", "ステータス",
+        ]
+        widths = [5, 8, 50, 25, 25, 20, 35, 8, 35, 12]
+    else:
+        headers = [
+            "No", "操作内容", "対象ウィンドウ", "対象要素",
+            "入力値", "URL", "スクリーンショット", "備考", "ステータス",
+        ]
+        widths = [5, 50, 25, 25, 20, 35, 15, 35, 12]
+
     for col, h in enumerate(headers, 1):
         ws.cell(row=1, column=col, value=h)
     _apply_header_style(ws, 1, len(headers))
@@ -142,31 +155,48 @@ def _write_steps_sheet(ws, event_log: dict) -> None:
         row = i + 2
         is_merged = bool(step.get("merged_into"))
         is_provisional = step.get("verification_status") == "provisional"
+        is_pending = step.get("verification_status") == "pending_review"
+        confidence = step.get("confidence")
 
         # Build notes
         notes_parts: list[str] = []
         if step.get("duplicate_count", 0) > 1:
             notes_parts.append(f"同一操作 x{step['duplicate_count']}")
         if is_merged:
-            notes_parts.append(f"→ Step {step['merged_into']}に統合")
+            notes_parts.append(f"-> Step {step['merged_into']}に統合")
         if step.get("gap_notes"):
             notes_parts.append(step["gap_notes"])
         notes = "; ".join(notes_parts)
 
-        ws.cell(row=row, column=1, value=step["num"])
-        ws.cell(row=row, column=2, value=step.get("description", ""))
-        ws.cell(row=row, column=3, value=step.get("window_alias", ""))
-        ws.cell(row=row, column=4, value=step.get("element_alias", ""))
-        ws.cell(row=row, column=5, value=step.get("input_value") or "")
-        ws.cell(row=row, column=6, value=step.get("url") or "")
-        ws.cell(row=row, column=7, value="")  # Screenshot placeholder
-        ws.cell(row=row, column=8, value=notes)
-        ws.cell(row=row, column=9, value=step.get("verification_status", ""))
+        if is_video:
+            ws.cell(row=row, column=1, value=step["num"])
+            ws.cell(row=row, column=2, value=step.get("timestamp", ""))
+            ws.cell(row=row, column=3, value=step.get("description", ""))
+            ws.cell(row=row, column=4, value=step.get("window_alias", ""))
+            ws.cell(row=row, column=5, value=step.get("element_alias", ""))
+            ws.cell(row=row, column=6, value=step.get("input_value") or "")
+            ws.cell(row=row, column=7, value=step.get("url") or "")
+            ws.cell(row=row, column=8, value=f"{confidence:.2f}" if confidence else "")
+            ws.cell(row=row, column=9, value=notes)
+            ws.cell(row=row, column=10, value=step.get("verification_status", ""))
+        else:
+            ws.cell(row=row, column=1, value=step["num"])
+            ws.cell(row=row, column=2, value=step.get("description", ""))
+            ws.cell(row=row, column=3, value=step.get("window_alias", ""))
+            ws.cell(row=row, column=4, value=step.get("element_alias", ""))
+            ws.cell(row=row, column=5, value=step.get("input_value") or "")
+            ws.cell(row=row, column=6, value=step.get("url") or "")
+            ws.cell(row=row, column=7, value="")  # Screenshot placeholder
+            ws.cell(row=row, column=8, value=notes)
+            ws.cell(row=row, column=9, value=step.get("verification_status", ""))
 
         _apply_body_style(ws, row, len(headers))
 
-        # Highlight provisional rows
-        if is_provisional and not is_merged:
+        # Highlight based on confidence/status
+        if is_video and confidence is not None and confidence < 0.7 and not is_merged:
+            for col in range(1, len(headers) + 1):
+                ws.cell(row=row, column=col).fill = _LOW_CONF_FILL
+        elif (is_provisional or is_pending) and not is_merged:
             for col in range(1, len(headers) + 1):
                 ws.cell(row=row, column=col).fill = _PROVISIONAL_FILL
 
@@ -176,7 +206,6 @@ def _write_steps_sheet(ws, event_log: dict) -> None:
                 ws.cell(row=row, column=col).font = _MERGED_FONT
 
     # Column widths
-    widths = [5, 50, 25, 25, 20, 35, 15, 35, 12]
     for col, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(col)].width = w
 
@@ -255,8 +284,11 @@ def _write_metadata_sheet(ws, event_log: dict) -> None:
         ("出力ディレクトリ", rm.get("output_dir", "")),
         ("", ""),
         ("--- 入力ファイル ---", ""),
-        ("Robin Script", inp.get("robin_script", "")),
-        ("Robin Script SHA-256", inp.get("robin_script_sha256", "")),
+        ("動画ファイル", inp.get("video_file") or "なし"),
+        ("動画ファイル SHA-256", inp.get("video_file_sha256") or ""),
+        ("音声あり", str(inp.get("with_audio", False))),
+        ("Robin Script", inp.get("robin_script") or "なし"),
+        ("Robin Script SHA-256", inp.get("robin_script_sha256") or ""),
         ("ControlRepository", inp.get("control_repository") or "なし"),
         ("OBS動画", inp.get("obs_video") or "なし"),
         ("", ""),
