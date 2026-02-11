@@ -16,49 +16,61 @@
 ## Active Projects
 
 ### シナリオ55（振込Excel転記）
-**Status**: 3ヶ月バッチ書込完了・検証済み → 本番デプロイ待ち
+**Status**: ✅ コード開発完了・ドキュメント完備・本番デプロイ準備完了 → パイロット運用待ち（2月末日）
 
-**最新結果（2026-02-11 batch_3months.py）**:
+**品質実績（2026-02-11）**:
 
-| 月 | Success | New | Overflow | Error | 金額 |
-|---|---|---|---|---|---|
-| R7.10 (Nov) | 34 | 1 | 0 | 0 | 3,515,577円 |
-| R7.11 (Dec) | 12 | 0 | 0 | 0 | 599,215円 |
-| R7.12 (Jan) | 3 | 0 | 0 | 0 | 141,938円 |
-| **合計** | **49** | **1** | **0** | **0** | **4,256,730円** |
+| 項目 | 結果 |
+|------|------|
+| 3ヶ月バッチ書込 | 49件成功, 1件新規, 0エラー, 4,256,730円 |
+| 書込整合性 | **100%** (50/50 CSV→Excel完全一致) |
+| コードバグ | **0件**（全テスト通じて） |
+| GT再現率 | R7.10: 97%, R7.11: 86%, R7.12: 83% |
 
-- **書込整合性**: CSV→Excel **50/50 (100%)** 金額一致
-- **コードバグ**: 0件
-- **過去GT再現率**: R7.10: 97%, R7.11: 86%（同一コード、2026-02-10検証済み）
+**今セッション完了（2026-02-11）**:
 
-**解決済みバグ（今セッション）**:
-- **転記0件問題**: 冪等性ログ(`log/v2_processed_LOCAL_*.csv`)が前回実行分のまま残存 → 全件が重複スキップされていた。ログをバックアップ(`backup_20260211_batch3m/`)してクリアし解決
-- `find_supplier_row()` 自体は正常動作（209社354行キャッシュ構築OK）
+1. **数値関係性の深堀り調査** — H列（税計算数式: 本体=税抜、税行=10%消費税）、G列（税区分数式）、J列（SUM数式16箇所）、K/L列（支払日・支払日計）を特定。8%軽減税率スロット1行のみ確認（対応不要）。
 
-**RPAテンプレ正本（2026-02-11確定）**:
-- **正本**: `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\docs\55 総合振込計上・支払伝票_RPA用原本.xlsx`
-- LOCAL: このファイルのRPAテンプレシートをそのまま使用
-- PROD: RPAテンプレシートを本番原本に追加してから実行
+2. **Excel 12列構造の完全記録** — scenario-55 SKILL.md Section 3 に全列（A-L）の詳細を記載。2行1セット構造（偶数=本体、奇数=税）、autofilter範囲、数式の仕様を網羅。
 
-**教師データ比較の注意**:
-- `docs\`のExcelファイル（78シート版）はR7.10-R7.12の手入力実績データなし（合計行のみ）
-- 吉田さん手入力の教師データは本番サーバー（`\\192.168.1.251\TIC-mainSV\...`）にのみ存在
-- 過去セッションのGT比較スクリプト(`reproduce_gt_test.py`)は削除済み
+3. **ドキュメント作成**:
+   - **概要説明書（Excel）**: `work\シナリオ55_概要説明書.xlsx`（6シート構成、プロフェッショナルフォーマット）
+   - **導入手順書（Word）**: `docs\シナリオ55_導入手順書.docx`（13セクション、本番デプロイ全ステップ網羅）
 
-**冪等性ログ運用ルール（重要）**:
-- 再実行時は `log/v2_processed_LOCAL_*.csv` を事前にバックアップ＆クリアすること
-- または `batch_3months.py` にログクリアオプションを追加する
+4. **知見記録**:
+   - **RK10 SKILL.md Section 9-10**: Python連携パターン集9項目（xlwings vs openpyxl、原本保護、JIDOKA検証、冪等性ログ、DOM smoke test、Playwright frame操作、HTMLメール通知、テンプレートスロット検索、銀行休業日対応）+ フォルダ構成規約
+   - **AGENTS.md**: Gate 4（ソース明記）、Gate 5（矛盾チェック）、自律度制御レベル追加
+   - **structural-verification.md**: 新規作成（構造的検証プロトコル）
+
+5. **Git Push完了** — Commit `6324fcd`: 848行追加、6ファイル更新
 
 **本番デプロイ残タスク**:
-1. 本番PCデプロイ＋xlwings v0.33.20インストール
-2. パイロット運用開始（2月末日、有人監視、吉田さんフィードバック）
 
-- **Skill**: `.claude/skills/scenario-55/SKILL.md`
-- **Decisions**: `plans/decisions/projects/scenario-55-furikomi.md`
-- **Key files**: `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\tools\`
-- **出力ファイル**: `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\work\55_RPA1_3M_retest_20260211.xlsx`
-- **scratchpad**: `C:\Users\masam\AppData\Local\Temp\claude\c--ProgramData-Generative-AI-Github-PDF-RakuRaku-Seisan\78db80ac-e7d8-4318-a9be-086fe5eb3f82\scratchpad\`
-- **CSV**: `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\data\payment_requests\payment_2025{10,11,12}_*_cc300.csv`
+| タスク | 詳細 | いつ |
+|--------|------|------|
+| xlwingsインストール | 本番PCに全依存パッケージ + Chromium | デプロイ当日 |
+| 資格情報設定 | Windows資格情報マネージャーに楽楽精算ID/PW（2件） | デプロイ当日 |
+| 設定ファイル確認 | RK10_config_PROD.xlsx のURL・パス確認 | デプロイ当日 |
+| Preflight Check | `python preflight_check.py --env PROD` 全項目OK | デプロイ当日 |
+| **パイロット運用** | 有人監視で実行、吉田さん確認 | **2月末日** |
+
+**未調査項目（低優先）**:
+- B2: J列SUM数式の上書きリスク（複数明細支払先）— パイロット前に確認推奨だが必須ではない
+
+**重要な運用注意**:
+- 会社コード300必須（省略で4倍データ取得）
+- エラー時は必ずメール送信（`--no-mail`でも）
+- 冪等性ログは再実行時にバックアップ＆クリア
+- 12月末日は自動で12/30に繰り上げ
+- `docs\` 原本は編集禁止、`work\` にコピーして作業
+
+**Key Files**:
+- Skill: `.claude/skills/scenario-55/SKILL.md`
+- Decisions: `plans/decisions/projects/scenario-55-furikomi.md`
+- Tools: `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\tools\`
+- 概要説明書: `work\シナリオ55_概要説明書.xlsx`
+- 導入手順書: `docs\シナリオ55_導入手順書.docx`
+- RPAテンプレ正本: `docs\55 総合振込計上・支払伝票_RPA用原本.xlsx`
 
 ### Video2PDD v3
 **Status**: E2Eテスト完了 — Gemini Video Pipeline動作確認済み（ドキュメント更新済み）
