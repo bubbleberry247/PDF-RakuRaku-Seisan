@@ -52,10 +52,17 @@ class PreprocessResult:
 # 傾き補正閾値（度）
 SKEW_THRESHOLD_DEFAULT = 0.5
 
-# アップスケール設定（強化版）
-UPSCALE_MIN_WIDTH = 1200   # この幅以下ならアップスケール（1000→1200）
-UPSCALE_MIN_HEIGHT = 1200  # この高さ以下ならアップスケール（1000→1200）
-UPSCALE_FACTOR = 2.5       # アップスケール倍率（2.0→2.5）
+# アップスケール設定（Phase1改善: 1000→1200px）
+UPSCALE_MIN_WIDTH = 1200   # この幅以下ならアップスケール
+UPSCALE_MIN_HEIGHT = 1200  # この高さ以下ならアップスケール
+UPSCALE_FACTOR = 2.0       # アップスケール倍率
+
+# Sauvola二値化用（オプション）
+try:
+    from skimage.filters import threshold_sauvola
+    SKIMAGE_AVAILABLE = True
+except ImportError:
+    SKIMAGE_AVAILABLE = False
 
 
 class PDFPreprocessor:
@@ -64,7 +71,7 @@ class PDFPreprocessor:
     def __init__(self, dpi: int = 300):
         """
         Args:
-            dpi: 画像変換時の解像度
+            dpi: 画像変換時の解像度（デフォルト300dpi推奨）
         """
         self.dpi = dpi
         self.logger = get_logger()
@@ -124,14 +131,16 @@ class PDFPreprocessor:
 
         # 横長ページの場合
         if width > height:
-            # テキスト方向を解析して90度か270度かを判定
+            # テキスト方向を解析して90度か270度かを判定（0の場合は回転不要）
             rotation_angle = detector.detect_orientation_for_landscape(pdf_path)
-            needs_rotation = True
-            self.logger.info(f"横長ページ検出 ({width:.0f}x{height:.0f}) → {rotation_angle}度回転")
+            if rotation_angle != 0:
+                needs_rotation = True
+                self.logger.info(f"横長ページ検出 ({width:.0f}x{height:.0f}) → {rotation_angle}度回転")
+            else:
+                self.logger.info(f"横長ページ検出 ({width:.0f}x{height:.0f}) → 回転スキップ（スコア条件未達）")
         elif force_4way:
             # 縦長でも4方向検出を実行（180度反転チェック含む）
-            # Tesseract OSD + スコアベースの組み合わせ検出を使用（39%成功率達成）
-            rotation_angle = detector.detect_best_rotation_combined(pdf_path)
+            rotation_angle = detector.detect_best_rotation(pdf_path, use_enhanced=True)
             if rotation_angle != 0:
                 needs_rotation = True
                 self.logger.info(f"4方向検出: {rotation_angle}度回転が必要")
@@ -145,10 +154,13 @@ class PDFPreprocessor:
                 img_w, img_h = base_image['width'], base_image['height']
 
                 if img_w > img_h:
-                    # 画像が横長 = 90度か270度の回転が必要
+                    # 画像が横長 = 90度か270度の回転が必要（0の場合は回転不要）
                     rotation_angle = detector.detect_orientation_for_landscape(pdf_path)
-                    needs_rotation = True
-                    self.logger.info(f"横長画像検出 ({img_w}x{img_h}) → {rotation_angle}度回転")
+                    if rotation_angle != 0:
+                        needs_rotation = True
+                        self.logger.info(f"横長画像検出 ({img_w}x{img_h}) → {rotation_angle}度回転")
+                    else:
+                        self.logger.info(f"横長画像検出 ({img_w}x{img_h}) → 回転スキップ（スコア条件未達）")
 
         doc.close()
         return needs_rotation, rotation_angle
@@ -211,12 +223,12 @@ class PDFPreprocessor:
 
     def detect_skew_angle_hough(self, img: np.ndarray) -> float:
         """
-        Hough変換による傾き角度検出
+        Hough変換による傾き角度検出（改善版）
 
-        直線検出から主要な傾き角度を推定
+        CLAHE前処理 + 低閾値でコントラストの弱い画像でも直線検出可能
 
         Returns:
-            傾き角度（度）、-45〜+45の範囲
+            傾き角度（度）、-20〜+20の範囲（それ以外は0.0）
         """
         # グレースケール
         if len(img.shape) == 3:
@@ -224,23 +236,28 @@ class PDFPreprocessor:
         else:
             gray = img.copy()
 
-        # エッジ検出
-        edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+        # CLAHE（適応的ヒストグラム均等化）でコントラスト強調
+        # 薄い印刷やスキャン画像でもエッジを検出しやすくなる
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
 
-        # Hough変換で直線検出
-        lines = cv2.HoughLines(edges, 1, np.pi / 180, 200)
+        # エッジ検出
+        edges = cv2.Canny(enhanced, 50, 150, apertureSize=3)
+
+        # Hough変換で直線検出（閾値80: 薄い画像でも検出可能）
+        lines = cv2.HoughLines(edges, 1, np.pi / 180, 80)
 
         if lines is None or len(lines) == 0:
             return 0.0
 
-        # 角度を収集（水平線に近いもののみ）
+        # 角度を収集（水平に近い線のみ: -20〜+20度）
         angles = []
-        for line in lines[:100]:  # 最大100本
+        for line in lines:
             theta = line[0][1]
             angle_deg = np.degrees(theta) - 90  # 水平を0度に
 
-            # -45〜45度の範囲のみ
-            if -45 <= angle_deg <= 45:
+            # -20〜+20度の範囲のみ（レシートの傾きは通常この範囲内）
+            if -20 <= angle_deg <= 20:
                 angles.append(angle_deg)
 
         if not angles:
@@ -251,42 +268,37 @@ class PDFPreprocessor:
 
     def detect_skew_angle(self, img: np.ndarray) -> float:
         """
-        傾き角度を検出（Hough変換 + PCA併用）
+        傾き角度を検出（改善Hough法優先）
 
-        両手法の結果を組み合わせて精度向上
+        改善Hough法は33サンプルで異常検出0%を達成したため優先使用
+        Houghが検出できない場合のみPCA法をフォールバックとして使用
 
         Returns:
-            傾き角度（度）、-45〜+45の範囲
+            傾き角度（度）、-20〜+20の範囲
         """
-        # PCA法
-        angle_pca = self.detect_skew_angle_pca(img)
-
-        # Hough変換法
+        # 改善Hough法（CLAHE + 閾値80）
         angle_hough = self.detect_skew_angle_hough(img)
 
-        # 両方の結果を考慮
-        if abs(angle_pca) < 0.1 and abs(angle_hough) < 0.1:
-            # 両方とも0に近い → 傾きなし
+        # Houghが有効な角度を検出した場合はそれを使用
+        if abs(angle_hough) >= 0.1:
+            self.logger.debug(f"傾き検出(Hough): {angle_hough:.2f}度")
+            return angle_hough
+
+        # Houghが0に近い場合、PCA法でダブルチェック
+        angle_pca = self.detect_skew_angle_pca(img)
+
+        # PCAが極端な値（25度以上）の場合は信頼しない
+        if abs(angle_pca) >= 25:
+            self.logger.debug(f"傾き検出(PCA): {angle_pca:.2f}度 → 異常値のため0を返す")
             return 0.0
 
-        if abs(angle_hough) < 0.1:
-            # Houghが検出できない → PCAを採用
+        # PCAが妥当な範囲の場合
+        if abs(angle_pca) >= 0.5:
+            self.logger.debug(f"傾き検出(PCA fallback): {angle_pca:.2f}度")
             return angle_pca
 
-        if abs(angle_pca) < 0.1:
-            # PCAが検出できない → Houghを採用
-            return angle_hough
-
-        # 両方検出できた場合
-        # 差が5度以内なら平均、そうでなければHoughを優先
-        if abs(angle_pca - angle_hough) < 5.0:
-            return (angle_pca + angle_hough) / 2
-        else:
-            # Hough変換の方が直線検出に特化しているため優先
-            self.logger.debug(
-                f"傾き検出差異: PCA={angle_pca:.2f}, Hough={angle_hough:.2f} → Hough採用"
-            )
-            return angle_hough
+        # 両方とも0に近い → 傾きなし
+        return 0.0
 
     def deskew_image(self, img: np.ndarray, angle: float, threshold: float = SKEW_THRESHOLD_DEFAULT) -> np.ndarray:
         """
@@ -330,73 +342,12 @@ class PDFPreprocessor:
 
         return rotated
 
-    def estimate_noise_level(self, img: np.ndarray) -> float:
-        """
-        画像のノイズレベルを推定
-
-        Laplacian分散でノイズを推定
-
-        Returns:
-            ノイズレベル（値が大きいほどノイズが多い）
-        """
-        # グレースケール
-        if len(img.shape) == 3:
-            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        else:
-            gray = img.copy()
-
-        # Laplacian分散でノイズ推定
-        laplacian = cv2.Laplacian(gray, cv2.CV_64F)
-        noise_level = laplacian.var()
-
-        return noise_level
-
-    def denoise_image(self, img: np.ndarray, level: str = 'auto') -> np.ndarray:
-        """
-        多段階ノイズ除去
-
-        Args:
-            img: 入力画像
-            level: 'light' / 'medium' / 'heavy' / 'auto'
-
-        Returns:
-            ノイズ除去後の画像
-        """
-        # 自動判定
-        if level == 'auto':
-            noise = self.estimate_noise_level(img)
-            if noise < 500:
-                level = 'light'
-            elif noise < 1500:
-                level = 'medium'
-            else:
-                level = 'heavy'
-            self.logger.debug(f"ノイズレベル自動判定: {noise:.1f} → {level}")
-
-        # グレースケール変換
-        if len(img.shape) == 3:
-            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        else:
-            gray = img.copy()
-
-        if level == 'light':
-            denoised = cv2.fastNlMeansDenoising(gray, h=5)
-        elif level == 'medium':
-            denoised = cv2.fastNlMeansDenoising(gray, h=10)
-        else:
-            # 金券レシート等のノイズが多い画像用
-            denoised = cv2.fastNlMeansDenoising(gray, h=15)
-            denoised = cv2.bilateralFilter(denoised, 9, 75, 75)
-
-        # RGBに戻す
-        return cv2.cvtColor(denoised, cv2.COLOR_GRAY2RGB)
-
     def enhance_image(self, img: np.ndarray) -> np.ndarray:
         """
         OCR向けの画像強調
 
         - コントラスト強調
-        - ノイズ除去（多段階）
+        - ノイズ除去
         """
         # グレースケール変換
         if len(img.shape) == 3:
@@ -404,15 +355,223 @@ class PDFPreprocessor:
         else:
             gray = img.copy()
 
-        # CLAHE（適応的ヒストグラム均等化）
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        # CLAHE（適応的ヒストグラム均等化）- 強化版
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
         enhanced = clahe.apply(gray)
 
-        # ノイズ除去（自動判定）
-        enhanced_rgb = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2RGB)
-        denoised = self.denoise_image(enhanced_rgb, level='auto')
+        # 軽いノイズ除去
+        denoised = cv2.fastNlMeansDenoising(enhanced, h=10)
 
-        return denoised
+        # RGBに戻す
+        result = cv2.cvtColor(denoised, cv2.COLOR_GRAY2RGB)
+
+        return result
+
+    def adaptive_binarize_sauvola(self, img: np.ndarray, window_size: int = 25, k: float = 0.2) -> np.ndarray:
+        """
+        Sauvola法による適応的二値化（FAX画像に効果的）
+
+        局所的な閾値を計算するため、明暗差のある画像でも効果的
+
+        Args:
+            img: 入力画像
+            window_size: 局所閾値計算のウィンドウサイズ（奇数）
+            k: Sauvolaパラメータ（0.2が標準）
+
+        Returns:
+            二値化された画像
+        """
+        if not SKIMAGE_AVAILABLE:
+            self.logger.warning("scikit-image未インストール: Sauvola二値化スキップ")
+            return img
+
+        # グレースケール変換
+        if len(img.shape) == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img.copy()
+
+        # Sauvola閾値計算
+        thresh = threshold_sauvola(gray, window_size=window_size, k=k)
+
+        # 二値化
+        binary = (gray > thresh).astype(np.uint8) * 255
+
+        # RGBに戻す
+        result = cv2.cvtColor(binary, cv2.COLOR_GRAY2RGB)
+
+        self.logger.debug(f"Sauvola二値化実行: window={window_size}, k={k}")
+        return result
+
+    def denoise_bilateral(self, img: np.ndarray, d: int = 9, sigma_color: float = 75, sigma_space: float = 75) -> np.ndarray:
+        """
+        バイラテラルフィルタによるノイズ除去
+
+        エッジを保持しながらノイズを除去（FAX/スキャン画像に効果的）
+
+        Args:
+            img: 入力画像
+            d: フィルタサイズ（-1で自動）
+            sigma_color: 色空間のシグマ
+            sigma_space: 座標空間のシグマ
+
+        Returns:
+            ノイズ除去後の画像
+        """
+        result = cv2.bilateralFilter(img, d=d, sigmaColor=sigma_color, sigmaSpace=sigma_space)
+        self.logger.debug(f"バイラテラルフィルタ実行: d={d}")
+        return result
+
+    def remove_moire(self, img: np.ndarray, kernel_size: int = 3) -> np.ndarray:
+        """
+        モアレパターン除去
+
+        FAX画像特有の縞模様ノイズを軽減
+
+        Args:
+            img: 入力画像
+            kernel_size: ガウシアンカーネルサイズ（奇数）
+
+        Returns:
+            モアレ除去後の画像
+        """
+        # グレースケール変換
+        if len(img.shape) == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img.copy()
+
+        # ガウシアンぼかしで高周波ノイズ（モアレ）を除去
+        blurred = cv2.GaussianBlur(gray, (kernel_size, kernel_size), 0)
+
+        # RGBに戻す
+        result = cv2.cvtColor(blurred, cv2.COLOR_GRAY2RGB)
+
+        self.logger.debug(f"モアレ除去実行: kernel={kernel_size}")
+        return result
+
+    def add_border(self, img: np.ndarray, border_size: int = 10) -> np.ndarray:
+        """
+        画像に白ボーダーを追加（OCR認識向上）
+
+        Tesseract公式推奨: 画像端に文字があると認識失敗しやすいため
+        10px以上の白ボーダーを追加
+
+        Args:
+            img: 入力画像
+            border_size: ボーダーサイズ（ピクセル）
+
+        Returns:
+            ボーダー追加後の画像
+        """
+        result = cv2.copyMakeBorder(
+            img, border_size, border_size, border_size, border_size,
+            cv2.BORDER_CONSTANT, value=(255, 255, 255)
+        )
+        self.logger.debug(f"白ボーダー追加: {border_size}px")
+        return result
+
+    def adjust_character_thickness(self, img: np.ndarray, mode: str = 'auto') -> np.ndarray:
+        """
+        文字の太さを調整（膨張/収縮）
+
+        細すぎる文字は膨張、太すぎる文字は収縮で調整
+        レシートの薄い印字に効果的
+
+        Args:
+            img: 入力画像
+            mode: 'dilate'（膨張=太く）, 'erode'（収縮=細く）, 'auto'（自動判定）, 'none'
+
+        Returns:
+            調整後の画像
+        """
+        # グレースケール変換
+        if len(img.shape) == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img.copy()
+
+        kernel = np.ones((2, 2), np.uint8)
+
+        if mode == 'auto':
+            # 黒ピクセル密度で判定
+            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            black_ratio = np.sum(binary > 0) / binary.size
+            # 薄い印字（黒が少ない）なら膨張
+            if black_ratio < 0.03:
+                mode = 'dilate'
+                self.logger.debug(f"自動判定: 薄い印字検出（黒比率{black_ratio:.1%}）→ 膨張")
+            elif black_ratio > 0.15:
+                mode = 'erode'
+                self.logger.debug(f"自動判定: 太い文字検出（黒比率{black_ratio:.1%}）→ 収縮")
+            else:
+                mode = 'none'
+
+        if mode == 'dilate':
+            processed = cv2.dilate(gray, kernel, iterations=1)
+            self.logger.debug("文字膨張処理を実行")
+        elif mode == 'erode':
+            processed = cv2.erode(gray, kernel, iterations=1)
+            self.logger.debug("文字収縮処理を実行")
+        else:
+            processed = gray
+
+        # RGBに戻す
+        return cv2.cvtColor(processed, cv2.COLOR_GRAY2RGB)
+
+    def sharpen_unsharp_mask(self, img: np.ndarray, sigma: float = 1.0, strength: float = 1.5) -> np.ndarray:
+        """
+        アンシャープマスクで文字エッジを強調
+
+        ぼやけた文字のエッジを強調してOCR精度向上
+
+        Args:
+            img: 入力画像
+            sigma: ガウシアンぼかしのシグマ
+            strength: シャープ化の強度（1.0-2.0推奨）
+
+        Returns:
+            シャープ化後の画像
+        """
+        blurred = cv2.GaussianBlur(img, (0, 0), sigma)
+        sharpened = cv2.addWeighted(img, 1 + strength, blurred, -strength, 0)
+        result = np.clip(sharpened, 0, 255).astype(np.uint8)
+        self.logger.debug(f"アンシャープマスク実行: sigma={sigma}, strength={strength}")
+        return result
+
+    def stretch_contrast(self, img: np.ndarray, percentile: tuple = (2, 98)) -> np.ndarray:
+        """
+        パーセンタイルベースのコントラストストレッチ
+
+        全体的に薄い/暗い画像を自動補正
+
+        Args:
+            img: 入力画像
+            percentile: 正規化に使用するパーセンタイル範囲
+
+        Returns:
+            コントラスト補正後の画像
+        """
+        # グレースケール変換
+        if len(img.shape) == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img.copy()
+
+        p_low, p_high = np.percentile(gray, percentile)
+
+        if p_high > p_low:
+            stretched = np.clip(
+                (gray.astype(np.float32) - p_low) * 255.0 / (p_high - p_low),
+                0, 255
+            ).astype(np.uint8)
+        else:
+            stretched = gray
+
+        self.logger.debug(f"コントラストストレッチ実行: range=[{p_low:.0f}, {p_high:.0f}]")
+
+        # RGBに戻す
+        return cv2.cvtColor(stretched, cv2.COLOR_GRAY2RGB)
 
     def upscale_image(self, img: np.ndarray) -> np.ndarray:
         """
@@ -540,6 +699,13 @@ class PDFPreprocessor:
         do_deskew: bool = True,
         do_enhance: bool = False,
         do_shadow_removal: bool = True,
+        do_binarize: bool = False,
+        do_denoise: bool = False,
+        do_moire_removal: bool = False,
+        do_border: bool = True,
+        do_sharpen: bool = False,
+        do_stretch: bool = True,
+        do_thickness_adjust: bool = True,
         skew_threshold: float = SKEW_THRESHOLD_DEFAULT,
         force_4way_rotation: bool = True
     ) -> PreprocessResult:
@@ -552,6 +718,13 @@ class PDFPreprocessor:
             do_deskew: 傾き補正を行うか
             do_enhance: 画像強調を行うか
             do_shadow_removal: 影除去を行うか（Trueなら影検出時のみ実行）
+            do_binarize: Sauvola適応的二値化を行うか（FAX画像に効果的）
+            do_denoise: バイラテラルフィルタでノイズ除去を行うか
+            do_moire_removal: モアレパターン除去を行うか
+            do_border: 白ボーダーを追加するか（OCR端文字認識向上）
+            do_sharpen: アンシャープマスクでエッジ強調するか
+            do_stretch: コントラストストレッチを行うか
+            do_thickness_adjust: 文字太さの自動調整を行うか（薄い印字対応）
             skew_threshold: 傾き補正を行う閾値（度）デフォルト: 0.5度
             force_4way_rotation: 縦長でも4方向検出を行うか
 
@@ -568,39 +741,15 @@ class PDFPreprocessor:
         result = PreprocessResult(output_path=pdf_path)
 
         try:
-            current_path = pdf_path
             img_modified = False  # 画像が変更されたか
 
-            # 1. 回転補正（4方向対応）
-            needs_rotation, rotation_angle = self.detect_page_orientation(
-                current_path,
-                force_4way=force_4way_rotation
-            )
+            # 0. 元画像を読み込み（傾き検出は回転前に行う必要がある）
+            img = self.pdf_to_image(pdf_path)
 
-            if needs_rotation:
-                rotated_path = output_dir / f"_preproc_{pdf_path.name}"
-                current_path = self.rotate_pdf(current_path, rotation_angle, rotated_path)
-                result.rotated = True
-                result.rotation_angle = rotation_angle
-
-            # 画像を読み込み（傾き補正・影除去・画像強調で共有）
-            img = self.pdf_to_image(current_path)
-
-            # 1.5. 低解像度の場合はアップスケール
-            h, w = img.shape[:2]
-            if w < UPSCALE_MIN_WIDTH or h < UPSCALE_MIN_HEIGHT:
-                img = self.upscale_image(img)
-                img_modified = True
-
-            # 2. 影除去（オプション、影検出時のみ実行）
-            if do_shadow_removal:
-                has_shadow = self.detect_shadow(img)
-                if has_shadow:
-                    img = self.remove_shadow(img)
-                    result.shadow_removed = True
-                    img_modified = True
-
-            # 3. 傾き補正（オプション）
+            # 1. 傾き補正（回転前に実行！）
+            # 重要: Hough変換による傾き検出は水平線を基準にするため、
+            #       回転後（縦向き）では正しく検出できない。
+            #       そのため、元の向きで傾き検出・補正を行う。
             if do_deskew:
                 skew_angle = self.detect_skew_angle(img)
 
@@ -611,21 +760,109 @@ class PDFPreprocessor:
                     result.skew_angle = skew_angle
                     img_modified = True
 
-            # 4. 画像強調（オプション）
+            # 2. 回転補正（4方向対応）
+            # 傾き補正後の画像で回転方向を判定
+            # 一時PDFに保存して回転検出
+            temp_pdf = None
+            if img_modified:
+                temp_pdf = output_dir / f"_temp_{pdf_path.name}"
+                self.image_to_pdf(img, temp_pdf)
+                detect_path = temp_pdf
+            else:
+                detect_path = pdf_path
+
+            needs_rotation, rotation_angle = self.detect_page_orientation(
+                detect_path,
+                force_4way=force_4way_rotation
+            )
+
+            if needs_rotation:
+                # 画像を回転（OpenCVで直接回転）
+                if rotation_angle == 90:
+                    img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+                elif rotation_angle == 180:
+                    img = cv2.rotate(img, cv2.ROTATE_180)
+                elif rotation_angle == 270:
+                    img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                result.rotated = True
+                result.rotation_angle = rotation_angle
+                img_modified = True
+
+            # 一時ファイル削除
+            if temp_pdf and temp_pdf.exists():
+                temp_pdf.unlink()
+
+            # 3. 低解像度の場合はアップスケール
+            h, w = img.shape[:2]
+            if w < UPSCALE_MIN_WIDTH or h < UPSCALE_MIN_HEIGHT:
+                img = self.upscale_image(img)
+                img_modified = True
+
+            # 3.5 超低解像度（900x700未満）の場合はenhanceも強制適用
+            is_very_low_res = (w < 900 or h < 700)
+            if is_very_low_res and not do_enhance:
+                img = self.enhance_image(img)
+                result.enhanced = True
+                img_modified = True
+                self.logger.info(f"超低解像度のため強制enhance適用: {w}x{h}")
+
+            # 4. 影除去（オプション、影検出時のみ実行）
+            if do_shadow_removal:
+                has_shadow = self.detect_shadow(img)
+                if has_shadow:
+                    img = self.remove_shadow(img)
+                    result.shadow_removed = True
+                    img_modified = True
+
+            # 5. 画像強調（オプション）
             if do_enhance:
                 img = self.enhance_image(img)
                 result.enhanced = True
                 img_modified = True
 
-            # 画像が変更された場合のみPDFを再生成
-            if img_modified:
-                if not result.rotated:
-                    output_path = output_dir / f"_preproc_{pdf_path.name}"
-                else:
-                    output_path = current_path
-                current_path = self.image_to_pdf(img, output_path)
+            # 6. バイラテラルフィルタでノイズ除去（オプション）
+            if do_denoise:
+                img = self.denoise_bilateral(img)
+                img_modified = True
 
-            result.output_path = current_path
+            # 7. モアレ除去（オプション）
+            if do_moire_removal:
+                img = self.remove_moire(img)
+                img_modified = True
+
+            # 8. Sauvola適応的二値化（オプション、FAX画像向け）
+            if do_binarize:
+                img = self.adaptive_binarize_sauvola(img)
+                img_modified = True
+
+            # 9. コントラストストレッチ（薄い/暗い画像対応）
+            if do_stretch:
+                img = self.stretch_contrast(img)
+                img_modified = True
+
+            # 10. 文字太さ自動調整（薄い印字対応）
+            if do_thickness_adjust:
+                img = self.adjust_character_thickness(img, mode='auto')
+                img_modified = True
+
+            # 11. アンシャープマスク（ぼやけた文字対応）
+            if do_sharpen:
+                img = self.sharpen_unsharp_mask(img)
+                img_modified = True
+
+            # 12. 白ボーダー追加（最後に実行）
+            if do_border:
+                img = self.add_border(img)
+                img_modified = True
+
+            # 画像が変更された場合のみPDFを再生成
+            output_path = output_dir / f"_preproc_{pdf_path.name}"
+            if img_modified:
+                self.image_to_pdf(img, output_path)
+                result.output_path = output_path
+            else:
+                result.output_path = pdf_path
+
             result.success = True
 
             self.logger.info(
@@ -652,7 +889,7 @@ def test_preprocess():
     output_dir = Path(r"C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\data\preprocess_test")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    preprocessor = PDFPreprocessor(dpi=300)
+    preprocessor = PDFPreprocessor(dpi=200)
 
     # テスト対象
     test_files = [
