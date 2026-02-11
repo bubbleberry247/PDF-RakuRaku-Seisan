@@ -433,7 +433,251 @@ Keyence.OutlookActions.OutlookAction.CloseOutlook();
 
 ---
 
-## 9. 参照
+## 9. Python連携パターン集（シナリオ55より抽出）
+
+### 9.1 xlwings vs openpyxl の使い分け（★重要）
+
+| 状況 | 推奨ライブラリ | 理由 |
+|------|---------------|------|
+| 新規Excel作成 | openpyxl | 軽量、COM不要 |
+| 単純なExcel読み書き（数シート） | openpyxl | 十分対応可能 |
+| **複雑なExcel（多シート・マージセル・数式）** | **xlwings (COM)** | openpyxlはload→saveで破損する |
+| 数式を保持したまま値を書き込み | xlwings (COM) | openpyxlは数式を文字列として扱いがち |
+
+**実績**: 78シート×マージセルの振込伝票Excelで、openpyxlは2,734箇所の差分が発生。xlwingsは差分0。
+
+```python
+# xlwings COMによるExcel操作の基本
+import xlwings as xw
+
+app = xw.App(visible=False)
+try:
+    wb = app.books.open(excel_path)
+    ws = wb.sheets["シート名"]
+
+    # 値の読み書き（数式は保持される）
+    val = ws.range("I14").value
+    ws.range("I14").value = 10000
+
+    # シートコピー（テンプレートから新シート作成）
+    template_ws = wb.sheets["RPAテンプレ"]
+    template_ws.api.Copy(After=wb.sheets[-1].api)
+    new_ws = wb.sheets[-1]
+    new_ws.name = "RPA_R7.10月分"
+
+    wb.save()
+finally:
+    wb.close()
+    app.quit()
+```
+
+### 9.2 原本保護パターン（Source Excel Copy Mode）
+
+**原則**: 原本は絶対に直接編集しない。コピーして作業する。
+
+```
+docs\原本.xlsx  ──(コピー)──→  work\作業用_YYYYMMDD.xlsx
+（read-only）                  （RPAが書き込む対象）
+```
+
+```python
+import shutil
+from datetime import datetime
+
+ORIGINAL = r"docs\原本.xlsx"
+WORK_DIR = r"work"
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+work_path = os.path.join(WORK_DIR, f"55_RPA1_{timestamp}.xlsx")
+shutil.copy2(ORIGINAL, work_path)
+# 以降、work_pathに対してのみ書き込む
+```
+
+### 9.3 JIDOKA検証パターン（書込後の読み返し検証）
+
+**TPS自働化**: 書いた値を読み返して一致確認。不一致ならマーク＋停止＋通知。
+
+```python
+def verify_writes(ws, written_records: list[dict]) -> list[dict]:
+    """書込後に全件読み返して検証"""
+    mismatches = []
+    for rec in written_records:
+        row = rec["row"]
+        expected_amount = rec["amount"]
+        actual = ws.range((row, 9)).value  # I列
+
+        if actual != expected_amount:
+            mismatches.append({
+                "row": row,
+                "expected": expected_amount,
+                "actual": actual,
+                "supplier": rec["supplier"]
+            })
+            # 赤マーク（不完全印）
+            ws.range((row, 1)).color = (255, 200, 200)
+
+    if mismatches:
+        raise JidokaStopError(f"JIDOKA-STOP: {len(mismatches)}件の不一致")
+
+    return mismatches
+```
+
+### 9.4 冪等性ログパターン（二重転記防止）
+
+**再実行安全**: 処理済みレコードをログに記録し、同じデータを二度書かない。
+
+```python
+import csv, os
+
+LOG_PATH = "log/v2_processed_LOCAL_matsu.csv"
+
+def load_processed_keys() -> set:
+    if not os.path.exists(LOG_PATH):
+        return set()
+    with open(LOG_PATH, "r", encoding="utf-8") as f:
+        return {row["key"] for row in csv.DictReader(f)}
+
+def mark_processed(record: dict):
+    exists = os.path.exists(LOG_PATH)
+    with open(LOG_PATH, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["key", "supplier", "amount", "timestamp"])
+        if not exists:
+            writer.writeheader()
+        writer.writerow(record)
+```
+
+**運用注意**: 再実行時はログをバックアップ＆クリアすること（残存ログ→全件スキップ問題の実績あり）
+
+### 9.5 DOM Smoke Test（スクレイピング前のポカヨケ）
+
+**TPS ポカヨケ**: スクレイピング前にテーブルヘッダーを検証。UI変更を即検知。
+
+```python
+EXPECTED_HEADERS = ["No.", "申請者", "件名", "状態", "金額", ...]
+
+def smoke_test_dom(page) -> None:
+    headers = page.query_selector_all("table th")
+    actual = [h.inner_text().strip() for h in headers]
+
+    for i, (expected, got) in enumerate(zip(EXPECTED_HEADERS, actual)):
+        if expected != got:
+            raise DOMStructureError(
+                f"Column {i}: expected '{expected}', got '{got}'. "
+                "楽楽精算のUI変更の可能性あり。"
+            )
+```
+
+### 9.6 Playwright iframe/frame操作（SaaS対応）
+
+楽楽精算などのSaaSはiframe/frame構造を使用。`page.query_selector()`では要素が見つからない。
+
+```python
+# Bad: ページ直接アクセス（要素が見つからない）
+element = page.query_selector("table.data")  # → None
+
+# Good: frame経由でアクセス
+for frame in page.frames:
+    element = frame.query_selector("table.data")
+    if element:
+        break
+
+# Good: 直接URLナビゲーション（frame内リンクをクリックする代わり）
+page.goto("https://app.rakurakuseisan.jp/specific/page/url")
+```
+
+### 9.7 HTMLメール通知（Python + Outlook COM）
+
+**TPS アンドン**: 処理結果を担当者に即時通知。ハイパーリンク付き。
+
+```python
+import win32com.client
+
+def send_notification(subject: str, body_html: str, to: str, file_path: str = None):
+    outlook = win32com.client.Dispatch("Outlook.Application")
+    mail = outlook.CreateItem(0)
+    mail.To = to
+    mail.Subject = subject
+    mail.HTMLBody = f"""
+    <html><body>
+    <p>{body_html}</p>
+    <p>出力ファイル: <a href="file:///{file_path}">{file_path}</a></p>
+    </body></html>
+    """
+    mail.Send()
+```
+
+**エラー時は必ず通知**（`--no-mail`オプションでもエラーは送信）:
+- 件名に「★エラー発生★」を明示
+- traceback全文を含める
+- 開発者CC: `karimistk@gmail.com`
+
+### 9.8 テンプレートスロット検索（既存行の再利用）
+
+Excel原本に既存の空行（業者名だけ登録、金額=0）がある場合、新規行挿入より既存スロットを優先活用。
+
+```python
+def find_supplier_row(supplier_name: str, cache: dict) -> int | None:
+    """3段階マッチング: 完全一致 → 変異体 → 部分一致"""
+    normalized = normalize_name(supplier_name)
+
+    # Pass 1: 完全一致（正規化後）
+    if normalized in cache:
+        return get_unused_row(cache[normalized])
+
+    # Pass 2: 変異体マッチ（㈱↔株式会社、全角↔半角）
+    for variant in generate_variants(normalized):
+        if variant in cache:
+            return get_unused_row(cache[variant])
+
+    # Pass 3: 部分一致（3文字以上）
+    if len(normalized) >= 3:
+        for key in cache:
+            if normalized in key or key in normalized:
+                return get_unused_row(cache[key])
+
+    return None  # 未登録 → 新規行挿入 or A=6799（赤字）
+```
+
+### 9.9 銀行休業日対応（支払日の自動判定）
+
+末日支払の場合、年末年始（12/31）は銀行休業日のため前営業日（12/30等）に繰り上げ。
+
+```python
+from datetime import date
+
+BANK_HOLIDAYS = {12: {31}}  # 月: {休業日set}
+
+def get_actual_payment_date(year: int, month: int, day_type: str) -> date:
+    """支払グループ(15日/25日/末日)から実際の支払日を算出"""
+    if day_type == "末日":
+        import calendar
+        last_day = calendar.monthrange(year, month)[1]
+        d = date(year, month, last_day)
+        # 銀行休業日チェック（土日 + 年末年始）
+        while d.weekday() >= 5 or d.day in BANK_HOLIDAYS.get(d.month, set()):
+            d -= timedelta(days=1)
+        return d
+```
+
+---
+
+## 10. フォルダ構成規約（全シナリオ共通）
+
+```
+C:\ProgramData\RK10\Robots\{番号} {シナリオ名}\
+├── config\          設定ファイル（env.txt, RK10_config_*.xlsx, マスタCSV/JSON）
+├── docs\            原本・テンプレート（★read-only、作業禁止）
+├── work\            作業出力（生成ファイル、中間ファイル）
+├── log\             実行ログ、冪等性ログ
+├── tools\           Pythonスクリプト（正本のみ）
+├── data\            入力データ（スクレイピング結果CSV等）
+└── scenario\        .rksファイル
+```
+
+**重要**: `docs\` = 原本保管場所（書き換え禁止）、`work\` = 作業出力場所
+
+---
+
+## 11. 参照
 
 - **詳細スキル**: `repo:/external-repos/my-claude-skills/rk10-scenario/skill.md`
 - **各ロボットフォルダ**: `C:\ProgramData\RK10\Robots\`
