@@ -190,9 +190,8 @@ Windows環境でChromaDB無効のためFTS5テキスト検索のみだが、work
 | ポカヨケ検証 | **エラー0件、全一致** |
 | Codex指摘修正 | **4/4項目 完了** |
 
-**軽微な改善点（次セッション）**:
-- 成功時の検証ログ出力がない（rakuraku_receipt.py line 465-468は失敗時のみログ）
-- 成功時にも「【ポカヨケ】{dept}: 入力値確認OK（{amount:,}円）」を出力すると証跡が明確になる
+**追加改善完了**:
+- ✅ **成功時の検証ログ出力追加** — 入力値一致時に「【ポカヨケ】{dept}: 入力値確認OK（{amount:,}円）」を出力（rakuraku_receipt.py line 469-470）
 
 **Key Files**:
 - Tools: `C:\ProgramData\RK10\Robots\51&52ソフトバンク部門集計楽楽精算申請\tools\`
