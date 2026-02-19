@@ -274,7 +274,139 @@ clasp deploy
 ?action=updateConfig&key=TIME_LIMIT_MINUTES&value=60
 ```
 
-## 9. Common Pitfalls
+## 9. Project Cloning
+
+### When to Clone
+Clone an existing GAS webapp when creating a similar app with structural changes:
+- Different data schema (e.g., TestPlan16 → TestPlan14)
+- Different curriculum structure (e.g., 16 weeks → 14 weeks)
+- Domain-specific customization (e.g., 建築 → 土木)
+
+### Cloning Procedure
+
+**Step 1: Directory Copy**
+```bash
+cp -r "/path/to/source-project" "/path/to/new-project"
+cd "/path/to/new-project"
+```
+
+**Step 2: Schema Migration (db.gs)**
+
+Identify schema changes needed:
+- Sheet name changes (e.g., `TestPlan16` → `TestPlan14`)
+- Field additions/removals
+- Database naming (e.g., `Archi16W_DB_` → `Doboku14W_DB_`)
+
+```javascript
+// Before
+var SHEETS = {
+  TestPlan16: 'TestPlan16',
+};
+HEADERS[SHEETS.TestPlan16] = ['testIndex', 'label', 'unlockWeek'];
+
+// After
+var SHEETS = {
+  TestPlan14: 'TestPlan14',
+};
+HEADERS[SHEETS.TestPlan14] = ['testIndex', 'label', 'testType', 'unlockWeek'];
+```
+
+**Step 3: Code Updates**
+
+Batch replace references using sed:
+```bash
+# Update sheet references
+sed -i 's/TestPlan16/TestPlan14/g' src/*.gs
+
+# Update database name prefix
+sed -i 's/Archi16W_DB_/Doboku14W_DB_/g' src/db.gs
+
+# Update project-specific strings
+sed -i 's/建築施工管理技士/土木施工管理技士/g' src/index.html
+```
+
+**Step 4: Create New GAS Project**
+```bash
+# Remove old .clasp.json (avoid conflicts)
+rm .clasp.json
+
+# Create new GAS project
+npx clasp create --title "new-project-name" --type standalone --rootDir src
+```
+
+This generates `.clasp.json` with new `scriptId`:
+```json
+{"scriptId":"1giv21Jbc8lSmC8fQ3TDJ6gNP7-nH2m2KnPAYebhd0rK8B65gc0mvFzKS","rootDir":"src"}
+```
+
+**Step 5: Push Code (Auto-confirm)**
+```bash
+# Auto-confirm manifest changes
+echo "y" | npx clasp push
+```
+
+**Step 6: Run setup() via Apps Script Editor**
+
+Browser-based setup (recommended for first-time):
+
+1. Open GAS editor: `https://script.google.com/home/projects/<scriptId>/edit`
+2. Locate function dropdown:
+   - Top toolbar: `apiGetHome ▼` (or any visible function)
+   - Click dropdown → Search for `setup`
+   - Or use Ctrl+F in left sidebar to find `setup` function
+3. Select `setup` from dropdown
+4. Click **Run** button (▶️ icon)
+5. Authorize if prompted
+6. Check execution log (Ctrl+Enter or View → Logs)
+   - Look for: `Database created: Doboku14W_DB_YYYYMMDD`
+
+**Step 7: Deploy Web App**
+
+1. In GAS editor: **Deploy** → **New deployment**
+2. Type: **Web app**
+3. Execute as: **Me**
+4. Who has access: **Anyone** (or specific domain)
+5. Click **Deploy**
+6. Copy deployment URL (format: `https://script.google.com/macros/s/<deploymentId>/exec`)
+
+**Step 8: Verify Deployment**
+```bash
+# Test with curl
+curl "https://script.google.com/macros/s/<deploymentId>/exec"
+
+# Should return HTML content (index.html)
+```
+
+### Common Cloning Pitfalls
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| clasp push interactive prompt | Manifest change requires confirmation | Use `echo "y" \| npx clasp push` |
+| Database name not updated | Hardcoded string in db.gs | `sed -i "s/OldName_DB_/NewName_DB_/g" db.gs` |
+| .clasp.json deleted too early | Removed before clasp create | Manually create with scriptId from clasp output |
+| setup() not visible in editor | Function not loaded after push | Press F5 to reload editor |
+| checkDatabase() not appearing | New function needs refresh | Reload editor, or re-run setup() |
+| Schema references missed | Not all files updated | Use sed for batch replacement across `*.gs` files |
+
+### Apps Script Editor Tips (for Beginners)
+
+**Finding Functions:**
+- **Function dropdown**: Top toolbar shows current function (e.g., `apiGetHome ▼`)
+- **Dropdown search**: Click dropdown → type function name → select from list
+- **Sidebar search**: Ctrl+F in left file tree to find function definitions
+- **After push**: Always reload (F5) to see new functions
+
+**Running Functions:**
+- Select function from dropdown → Click **Run** (▶️) button
+- First run requires authorization (click **Review permissions**)
+- Check **Execution log** (Ctrl+Enter) for output and errors
+
+**Deployment:**
+- **New deployment**: Creates new URL (use for new projects)
+- **Manage deployments**: Update existing URL (use `-i` flag with clasp)
+- **Test deployments**: Use `?action=xxx` URL parameters for diagnostics
+
+## 10. Common Pitfalls
 
 | Pitfall | Solution |
 |---------|----------|
@@ -286,7 +418,7 @@ clasp deploy
 | CSP blocks external scripts | All JS must be inline in index.html |
 | 6-minute execution limit | Break long operations, use batch processing |
 
-## 10. Testing / Diagnostics
+## 11. Testing / Diagnostics
 
 ### Admin Endpoints (via URL parameters)
 - `?action=setupDb&dbId=xxx` — Link spreadsheet
@@ -305,3 +437,4 @@ clasp deploy
 - Production app: `C:\ProgramData\Generative AI\Github\archi-16w-training\src\`
 - Deploy URL pattern: `https://script.google.com/macros/s/<deploymentId>/exec`
 - Spreadsheet as DB: Each sheet = one table, row 1 = headers
+- Cloning example: doboku-14w-training (cloned from archi-16w-training, 2026-02-14)

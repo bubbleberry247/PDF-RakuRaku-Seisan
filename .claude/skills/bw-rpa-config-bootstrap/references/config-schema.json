@@ -1,0 +1,255 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/rpa-config.schema.json",
+  "title": "RPA Config Schema",
+  "description": "Configuration schema for RPA projects with Playwright + shared work queue",
+  "type": "object",
+  "required": ["version", "jobId", "paths"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Config schema version",
+      "pattern": "^\\d+\\.\\d+$",
+      "examples": ["1.0", "2.0"]
+    },
+    "jobId": {
+      "type": "string",
+      "description": "Unique job identifier for evidence bundling",
+      "pattern": "^[a-z0-9-]+$",
+      "minLength": 3,
+      "maxLength": 50,
+      "examples": ["rakuraku-expense-approval", "recoru-attendance-input"]
+    },
+    "paths": {
+      "type": "object",
+      "description": "File system paths (required for each PC setup)",
+      "required": ["queueRoot", "artifactsRoot", "inputDir", "outputDir"],
+      "properties": {
+        "queueRoot": {
+          "type": "string",
+          "description": "Shared work queue root directory (UNC path recommended)",
+          "minLength": 1,
+          "examples": ["\\\\server\\share\\rpa-queue", "C:\\RPA\\queue"]
+        },
+        "artifactsRoot": {
+          "type": "string",
+          "description": "Evidence bundle output directory",
+          "minLength": 1,
+          "examples": ["C:\\ProgramData\\RPA\\artifacts", "D:\\RPA\\evidence"]
+        },
+        "inputDir": {
+          "type": "string",
+          "description": "Input file directory",
+          "minLength": 1,
+          "examples": ["C:\\ProgramData\\RPA\\input", "D:\\RPA\\input"]
+        },
+        "outputDir": {
+          "type": "string",
+          "description": "Output file directory",
+          "minLength": 1,
+          "examples": ["C:\\ProgramData\\RPA\\output", "D:\\RPA\\output"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "credentials": {
+      "type": "object",
+      "description": "Credentials for external services (passwords via env vars)",
+      "properties": {
+        "rakuraku": {
+          "type": "object",
+          "description": "楽楽精算 credentials",
+          "required": ["companyCode", "userId", "passwordEnvVar"],
+          "properties": {
+            "companyCode": {
+              "type": "string",
+              "description": "Company code (can use ${ENV_VAR} template)",
+              "minLength": 1,
+              "examples": ["12345", "${RAKURAKU_COMPANY_CODE}"]
+            },
+            "userId": {
+              "type": "string",
+              "description": "User ID (can use ${ENV_VAR} template)",
+              "minLength": 1,
+              "examples": ["user01", "${RAKURAKU_USER_ID}"]
+            },
+            "passwordEnvVar": {
+              "type": "string",
+              "description": "Environment variable name containing password (NOT the password itself)",
+              "minLength": 1,
+              "examples": ["RAKURAKU_PASSWORD"]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "timeouts": {
+      "type": "object",
+      "description": "Timeout settings (milliseconds)",
+      "properties": {
+        "default": {
+          "type": "integer",
+          "description": "Default timeout for Playwright operations (ms)",
+          "minimum": 1000,
+          "maximum": 300000,
+          "default": 30000,
+          "examples": [30000, 60000]
+        },
+        "navigation": {
+          "type": "integer",
+          "description": "Timeout for page navigation (ms)",
+          "minimum": 1000,
+          "maximum": 600000,
+          "default": 60000,
+          "examples": [60000, 120000]
+        },
+        "api": {
+          "type": "integer",
+          "description": "Timeout for API responses (ms)",
+          "minimum": 1000,
+          "maximum": 120000,
+          "default": 10000,
+          "examples": [10000, 30000]
+        }
+      },
+      "additionalProperties": false
+    },
+    "retry": {
+      "type": "object",
+      "description": "Retry behavior for transient failures",
+      "properties": {
+        "maxAttempts": {
+          "type": "integer",
+          "description": "Maximum retry attempts",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 3,
+          "examples": [3, 5]
+        },
+        "backoff": {
+          "type": "string",
+          "description": "Backoff strategy",
+          "enum": ["none", "linear", "exponential"],
+          "default": "exponential"
+        },
+        "initialDelay": {
+          "type": "integer",
+          "description": "Initial delay before first retry (ms)",
+          "minimum": 100,
+          "maximum": 60000,
+          "default": 1000,
+          "examples": [1000, 5000]
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "description": "Evidence collection policy",
+      "properties": {
+        "trace": {
+          "type": "string",
+          "description": "Playwright trace collection",
+          "enum": ["off", "only-on-failure", "retain-on-failure", "always"],
+          "default": "retain-on-failure"
+        },
+        "screenshot": {
+          "type": "string",
+          "description": "Screenshot collection",
+          "enum": ["off", "only-on-failure", "always"],
+          "default": "only-on-failure"
+        },
+        "video": {
+          "type": "string",
+          "description": "Video recording",
+          "enum": ["off", "only-on-failure", "always"],
+          "default": "off"
+        },
+        "log": {
+          "type": "string",
+          "description": "Log verbosity",
+          "enum": ["error", "warn", "info", "debug"],
+          "default": "info"
+        }
+      },
+      "additionalProperties": false
+    },
+    "playwright": {
+      "type": "object",
+      "description": "Playwright-specific settings",
+      "properties": {
+        "headless": {
+          "type": "boolean",
+          "description": "Run browser in headless mode",
+          "default": true
+        },
+        "slowMo": {
+          "type": "integer",
+          "description": "Slow down operations by N milliseconds (debugging)",
+          "minimum": 0,
+          "maximum": 5000,
+          "default": 0
+        },
+        "viewport": {
+          "type": "object",
+          "description": "Browser viewport size",
+          "properties": {
+            "width": {
+              "type": "integer",
+              "minimum": 320,
+              "maximum": 3840,
+              "default": 1920
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 240,
+              "maximum": 2160,
+              "default": 1080
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "queue": {
+      "type": "object",
+      "description": "Shared work queue settings",
+      "properties": {
+        "workerId": {
+          "type": "string",
+          "description": "Unique worker ID (default: hostname)",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "minLength": 1,
+          "maxLength": 50,
+          "examples": ["RPA-PC-01", "WORKER-A"]
+        },
+        "heartbeatInterval": {
+          "type": "integer",
+          "description": "Heartbeat update interval (ms)",
+          "minimum": 5000,
+          "maximum": 120000,
+          "default": 30000
+        },
+        "staleThreshold": {
+          "type": "integer",
+          "description": "Stale worker detection threshold (ms)",
+          "minimum": 60000,
+          "maximum": 600000,
+          "default": 300000
+        },
+        "pollingInterval": {
+          "type": "integer",
+          "description": "Queue polling interval (ms)",
+          "minimum": 1000,
+          "maximum": 60000,
+          "default": 5000
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

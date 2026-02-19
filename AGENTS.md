@@ -554,3 +554,11 @@ Plan → Do（委託/実装） → Check（検証） → Act（改善/記録）
   - パス: `C:\ProgramData\RK10\Robots\{シナリオ番号}{シナリオ名}\work\`
   - **`docs\` フォルダは作業フォルダとして使用禁止**（原本・仕様書の保管場所）
   - docs\ = read-only sources（原本、テンプレート）、work\ = 作業出力（生成ファイル、中間ファイル）
+
+### 2026-02-18
+- **標準フォント規約（全成果物共通）**
+  - **日本語フォント**: メイリオ（Meiryo）
+  - **英語フォント**: Segoe UI
+  - **適用範囲**: Excel出力、HTML/CSSメール、ドキュメント生成、スライド等すべての成果物
+  - **設定例（CSS）**: `font-family: "Segoe UI", "Meiryo", sans-serif;`
+  - **設定例（openpyxl）**: `Font(name='Meiryo', ...)` / 英文のみ `Font(name='Segoe UI', ...)`

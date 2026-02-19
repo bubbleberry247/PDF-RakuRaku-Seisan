@@ -90,9 +90,11 @@
 ### 保存先とファイル名
 
 - 保存先は「対象月フォルダ + 作業用サブフォルダ」を前提に、設定で指定する（固定値にしない）。
-- **リネームはPDFの値を正（SSOT）** とする:
-  - PDF本文から `vendor`（発行元）, `issue_date`（請求日/発行日）, `amount`（**支払決定金額を優先**。無ければ請求金額/合計など）を抽出し、テンプレートで命名する。
-  - 抽出できない場合は **処理停止（ポカヨケ）** とし、エラー通知する（誤リネーム防止）。
+- **リネーム方針（ファイル名優先 + PDFフォールバック）**:
+  1. **ファイル名から抽出（第1優先）**: 添付ファイル名が `業者名_日付_金額_工事名.pdf` 等の命名規則に従っていれば採用（66.4%適合、OCRコスト削減）
+  2. **PDFフォールバック（第2優先）**: ファイル名から抽出失敗 → PDF本文から `vendor`, `issue_date`, `amount` を抽出
+  3. **両方失敗時**: 処理停止（ポカヨケ）＋エラー通知
+  - ルーティング用の工事名はPattern A（44.3%）のみファイル名から取得可能。残りはPDFフォールバックか「その他」
   - 既定テンプレート例: `{vendor_short}__{issue_date}__{amount_comma}円.pdf`
   - `vendor_short` は `株式会社` 等の法人格を除去した短縮名（例: `株式会社モビテック` -> `モビテック`）
 
@@ -130,8 +132,9 @@
 - 成功/エラー通知メール宛先（`mail.send_success`, `mail.success_to`, `mail.error_to`, `mail.error_cc`）
 - 一括印刷の有無、プリンタ名（未指定なら既定プリンタ）
 - 再実行で二重保存しないための運用（推奨）: `outlook.mark_as_read_on_success=true`（成功時に既読化）
-- リネーム（PDF SSOT）設定（必須）:
+- リネーム（filename-first + PDF fallback）設定（必須）:
   - `rename.enabled=true`
+  - `rename.filename_first=true`（ファイル名優先モード）
   - `rename.company_deny_regex`（自社名除外。例: `東海インフラ建設株式会社`）
   - `rename.file_name_template`（命名テンプレート）
 
@@ -179,7 +182,7 @@
 | V2 | URLのみメール検知時の停止/通知 | Web請求未対応での取りこぼし/誤完了 | `--scan-only` でURL-only件数と対象メール件数を確認 | 一部検証（URL-only 0件: `run_20260210_003921`） | `artifacts/run_YYYYMMDD_HHMMSS/report.json` |
 | V3 | 暗号化PDFのパスワード照合 | 復号失敗による保存/印刷漏れ | パスワード通知メールと暗号化PDFを1件ずつ通す | 未検証 | `artifacts/run_YYYYMMDD_HHMMSS/run.log` |
 | V4 | ZIP添付のパスワード解凍 | ZIP内PDFの取りこぼし | パスワード通知 + ZIP添付の組で1件検証 | 未検証 | `artifacts/run_YYYYMMDD_HHMMSS/run.log` |
-| V5 | リネーム抽出精度（vendor/date/amount） | 誤命名による運用混乱 | 代表5件で `report.csv` と実物照合 | 未検証 | `artifacts/run_YYYYMMDD_HHMMSS/report.csv` |
+| V5 | リネーム抽出精度（filename-first + PDF fallback） | 誤命名による運用混乱 | 代表5件で `report.csv` の `extraction_source` を確認（filename/pdf/failed）。ファイル名優先が機能しているか、フォールバックが正常動作しているか検証 | 未検証 | `artifacts/run_YYYYMMDD_HHMMSS/report.csv` |
 | V6 | 保存先UNC到達性/権限 | 保存失敗・サイレント失敗 | `--execute --max-messages 1` で保存先まで到達確認 | 未検証 | `artifacts/run_YYYYMMDD_HHMMSS/run.log` |
 | V7 | 印刷/結合の実機挙動 | 誤印刷・印刷漏れ | `--print --execute --max-messages 1` で検証 | 未検証 | `artifacts/run_YYYYMMDD_HHMMSS/run.log` |
 | V8 | 成功時の既読化 | 二重処理/処理漏れ | `mark_as_read_on_success=true` で1件検証 | 未検証 | Outlook画面 + `run.log` |

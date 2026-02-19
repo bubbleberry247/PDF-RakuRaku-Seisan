@@ -171,6 +171,14 @@ try:
 except Exception:
     _PYMUPDF_AVAILABLE = False
 
+try:
+    import cv2 as _cv2  # type: ignore
+    import numpy as _np  # type: ignore
+
+    _CV2_AVAILABLE = True
+except ImportError:
+    _CV2_AVAILABLE = False
+
 # easyocr is optional and loaded lazily (heavy).
 _EASYOCR_AVAILABLE = importlib.util.find_spec("easyocr") is not None
 
@@ -234,6 +242,13 @@ INVOICE_NO_RE = re.compile(
     r"(請求書番号|請求書No\.?|請求No\.?|Invoice\s*No\.?|INV\.?)[^0-9A-Za-z]*([0-9A-Za-z\-_/]{3,})"
 )
 
+# Vendor name corrections for common OCR misrecognitions (pdf-ocr Skill knowledge).
+# Key = OCR misread pattern (substring), Value = corrected name.
+VENDOR_OCR_CORRECTIONS: dict[str, str] = {
+    "緑エキスパート": "縁エキスパート",
+    # Add more corrections as discovered during pilot testing
+}
+
 ZIP_MAX_MEMBERS = 80
 ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES = 250 * 1024 * 1024
 ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES = 80 * 1024 * 1024
@@ -251,6 +266,10 @@ class OutlookSelection:
     subject_allow_regex: str | None = None
     subject_deny_regex: str | None = None
     mark_as_read_on_success: bool = False
+    # If true, filter by FlagStatus (0 = no flag = unprocessed).
+    use_flag_status: bool = False
+    # If true, set FlagStatus = 2 (red flag) on successful processing.
+    mark_flag_on_success: bool = False
 
 
 @dataclass(frozen=True)
@@ -284,6 +303,8 @@ class RenameConfig:
     # Regex to exclude recipient company names from vendor extraction (optional).
     company_deny_regex: str | None = None
     max_pages: int = 2
+    # If true, try to extract invoice fields from filename before PDF extraction.
+    filename_first: bool = True
 
 
 @dataclass(frozen=True)
@@ -304,6 +325,7 @@ class PasswordNote:
     received_time: datetime
     subject: str
     password: str
+    sender: str
 
 
 @dataclass(frozen=True)
@@ -324,6 +346,19 @@ class SavedAttachment:
     was_encrypted: bool
     decrypted_path: str | None
     encrypted_original_path: str | None
+
+
+def _mask_url(url: str) -> str:
+    """Mask sensitive parts of URLs for safe reporting."""
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url)
+        # Keep scheme + host, mask path/query
+        masked = f"{parsed.scheme}://{parsed.netloc}/***masked***"
+        return masked
+    except Exception:
+        return "***masked_url***"
 
 
 @dataclass(frozen=True)
@@ -573,7 +608,7 @@ def _extract_pdf_text_easyocr_ocr(pdf_path: Path, *, run_dir: Path) -> str:
     tmp_obj = tempfile.TemporaryDirectory(prefix="s12_13_easyocr_")
     tmp_dir = Path(tmp_obj.name)
     try:
-        attempts: list[int] = [120, 150, 200]
+        attempts: list[int] = [200, 300]
         best = ""
         best_dpi: int | None = None
 
@@ -586,9 +621,12 @@ def _extract_pdf_text_easyocr_ocr(pdf_path: Path, *, run_dir: Path) -> str:
             except Exception:
                 continue
 
+            # Apply pdf-ocr Skill preprocessing (deskew + shadow removal).
+            preproc_img = _preprocess_png_for_ocr(tmp_img)
+
             try:
                 # detail=0 returns list[str]. Keep as lines to preserve signals.
-                lines = reader.readtext(str(tmp_img), detail=0)
+                lines = reader.readtext(str(preproc_img), detail=0)
             except Exception:
                 continue
 
@@ -696,6 +734,96 @@ def _tesseract_image_to_text(
     return proc.stdout or ""
 
 
+def _preprocess_png_for_ocr(img_path: Path) -> Path:
+    """Apply deskew and shadow removal to a rendered PNG before OCR.
+
+    Implements algorithms from pdf-ocr Skill (pdf_preprocess.py template):
+    - Deskew: Hough transform line detection → median angle → warpAffine
+    - Shadow removal: block brightness std deviation → GaussianBlur background subtraction
+
+    Returns path to preprocessed image (new file) or original if unchanged/unavailable.
+    """
+    if not _CV2_AVAILABLE:
+        return img_path
+    try:
+        img = _cv2.imread(str(img_path))
+        if img is None:
+            return img_path
+
+        modified = False
+
+        # --- Deskew (Hough transform, from pdf_preprocess.py PDFPreprocessor.detect_skew_angle_hough) ---
+        gray = _cv2.cvtColor(img, _cv2.COLOR_BGR2GRAY)
+        clahe = _cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        enhanced_gray = clahe.apply(gray)
+        edges = _cv2.Canny(enhanced_gray, 50, 150, apertureSize=3)
+        lines = _cv2.HoughLines(edges, 1, _np.pi / 180, 80)
+
+        skew_angle = 0.0
+        if lines is not None and len(lines) > 0:
+            angles = []
+            for line in lines:
+                theta = line[0][1]
+                angle_deg = float(_np.degrees(theta)) - 90.0
+                if -20.0 <= angle_deg <= 20.0:
+                    angles.append(angle_deg)
+            if angles:
+                skew_angle = float(_np.median(angles))
+
+        if abs(skew_angle) >= 0.5:  # SKEW_THRESHOLD_DEFAULT from pdf_preprocess.py
+            h, w = img.shape[:2]
+            center = (w // 2, h // 2)
+            M = _cv2.getRotationMatrix2D(center, skew_angle, 1.0)
+            img = _cv2.warpAffine(
+                img, M, (w, h),
+                flags=_cv2.INTER_CUBIC,
+                borderMode=_cv2.BORDER_CONSTANT,
+                borderValue=(255, 255, 255),
+            )
+            modified = True
+
+        # --- Shadow removal (from pdf_preprocess.py PDFPreprocessor.detect_shadow / remove_shadow) ---
+        gray2 = _cv2.cvtColor(img, _cv2.COLOR_BGR2GRAY)
+        h_img, w_img = gray2.shape
+        block_h, block_w = max(1, h_img // 4), max(1, w_img // 4)
+        brightnesses = []
+        for bi in range(4):
+            for bj in range(4):
+                block = gray2[bi * block_h:(bi + 1) * block_h, bj * block_w:(bj + 1) * block_w]
+                brightnesses.append(float(_np.mean(block)))
+        has_shadow = float(_np.std(brightnesses)) > 30.0
+
+        if has_shadow:
+            kernel_size = max(h_img, w_img) // 10
+            if kernel_size % 2 == 0:
+                kernel_size += 1
+            kernel_size = max(kernel_size, 51)
+            background = _cv2.GaussianBlur(gray2, (kernel_size, kernel_size), 0)
+            mean_bg = float(_np.mean(background))
+            with _np.errstate(divide="ignore", invalid="ignore"):
+                normalized = gray2.astype(_np.float32) * (mean_bg / background.astype(_np.float32))
+                normalized = _np.clip(normalized, 0, 255).astype(_np.uint8)
+            pct_lo, pct_hi = _np.percentile(normalized, [2, 98])
+            if pct_hi > pct_lo:
+                stretched = _np.clip(
+                    (normalized - pct_lo) * 255.0 / (pct_hi - pct_lo), 0, 255
+                ).astype(_np.uint8)
+            else:
+                stretched = normalized
+            img = _cv2.cvtColor(stretched, _cv2.COLOR_GRAY2BGR)
+            modified = True
+
+        if not modified:
+            return img_path
+
+        preproc_path = img_path.parent / f"_preproc_{img_path.name}"
+        _cv2.imwrite(str(preproc_path), img)
+        return preproc_path
+
+    except Exception:
+        return img_path
+
+
 def _extract_pdf_text_tesseract_ocr(pdf_path: Path, *, run_dir: Path) -> str:
     """
     OCR the first page using tesseract (no Torch dependency).
@@ -719,7 +847,7 @@ def _extract_pdf_text_tesseract_ocr(pdf_path: Path, *, run_dir: Path) -> str:
     tmp_obj = tempfile.TemporaryDirectory(prefix="s12_13_tess_")
     tmp_dir = Path(tmp_obj.name)
     try:
-        attempts: list[int] = [120, 150, 200]
+        attempts: list[int] = [200, 250, 300]
         best = ""
         best_dpi: int | None = None
         last_error: BaseException | None = None
@@ -732,9 +860,12 @@ def _extract_pdf_text_tesseract_ocr(pdf_path: Path, *, run_dir: Path) -> str:
                 last_error = e
                 continue
 
+            # Apply pdf-ocr Skill preprocessing (deskew + shadow removal).
+            preproc_img = _preprocess_png_for_ocr(tmp_img)
+
             try:
                 raw = _tesseract_image_to_text(
-                    tmp_img,
+                    preproc_img,
                     languages=languages,
                     tessdata_dir=tessdata_dir,
                     timeout_s=60,
@@ -891,9 +1022,9 @@ def _extract_pdf_text_yomitoku_ocr(pdf_path: Path, *, run_dir: Path) -> str:
     tmp_dir = Path(tmp_obj.name)
     try:
         attempts: list[tuple[int, bool]] = [
-            (150, True),
             (200, True),
-            (200, False),
+            (300, True),
+            (300, False),
         ]
         best = ""
         for dpi, lite_mode in attempts:
@@ -958,6 +1089,16 @@ def _extract_invoice_fields_from_pdf(
                 return fields
     except Exception as e:
         _append_log(log_path, f"[WARN] tesseract ocr failed: {pdf_path.name} error={e}")
+
+    # 3.5) EasyOCR (faster than YomiToku, good Japanese support)
+    try:
+        if _EASYOCR_AVAILABLE and _PYMUPDF_AVAILABLE:
+            text = _extract_pdf_text_easyocr_ocr(pdf_path, run_dir=run_dir)
+            fields = _extract_invoice_fields(text=text, company_deny_regex=company_deny_regex)
+            if fields:
+                return fields
+    except Exception as e:
+        _append_log(log_path, f"[WARN] easyocr ocr failed: {pdf_path.name} error={e}")
 
     # 4) YomiToku OCR (optional)
     try:
@@ -1090,8 +1231,173 @@ def _debug_extract_invoice_fields_from_pdf(
     return None
 
 
+def _extract_invoice_fields_from_filename(
+    filename: str, company_deny_regex: str | None
+) -> ExtractedPdfFields | None:
+    """
+    Extract invoice fields from filename before PDF extraction.
+
+    Supported patterns:
+    1. {vendor}_{YYYYMMDD}_{amount}_{construction}.pdf (44.3%)
+    2. {vendor}_{YYYYMMDD}_{amount}.pdf (22.1%)
+    3. {vendor}-{YYYYMMDD}-{amount}-{construction}.pdf (dash variant)
+    4. {vendor}_{YYYY.MM.DD}_{amount}_{construction}.pdf (dot-date variant)
+    5. {YYYY},{MM},{DD}{vendor}{amount}.pdf (legacy comma format)
+
+    Returns ExtractedPdfFields or None if no pattern matches.
+    """
+    # Normalize and remove extension
+    normalized = normalize("NFKC", filename)
+    stem = normalized.removesuffix(".pdf")
+
+    deny_re = re.compile(company_deny_regex) if company_deny_regex else None
+
+    # Pattern 1 & 2: vendor_YYYYMMDD_amount[_construction]
+    # Example: 名鉄協商_20251227_400.pdf or 名鉄協商_20251227_400_東海興業.pdf
+    # Also handles 9-digit date typos (e.g. 202501225 → 20251225 by removing the extra digit).
+    pattern_a = re.compile(
+        r"^(?P<vendor>.+?)_(?P<date>\d{7,9})_(?P<amount>[\d,，]+)(?:_(?P<construction>.+))?$"
+    )
+    m = pattern_a.match(stem)
+    if m:
+        vendor = m.group("vendor")
+        date_str = m.group("date")
+        amount_str = m.group("amount").replace(",", "").replace("，", "")
+
+        # Validate / correct date_str to exactly 8 digits (YYYYMMDD).
+        if len(date_str) != 8:
+            corrected: str | None = None
+            if len(date_str) == 9:
+                # Try removing each digit to find the first valid YYYYMMDD.
+                for remove_pos in range(9):
+                    cand = date_str[:remove_pos] + date_str[remove_pos + 1:]
+                    if cand[:2] == "20":
+                        try:
+                            y, mo, d = int(cand[0:4]), int(cand[4:6]), int(cand[6:8])
+                            if 2000 <= y <= 2100 and 1 <= mo <= 12 and 1 <= d <= 31:
+                                corrected = cand
+                                break
+                        except (ValueError, IndexError):
+                            pass
+            if corrected is not None:
+                date_str = corrected
+            else:
+                date_str = ""  # Cannot recover a valid date; fall through.
+
+        if date_str:
+            if deny_re and deny_re.search(vendor):
+                return None
+
+            try:
+                amount = int(amount_str)
+                return ExtractedPdfFields(
+                    vendor=vendor,
+                    issue_date=date_str,
+                    amount=amount,
+                    invoice_no=None,
+                )
+            except ValueError:
+                pass
+
+    # Pattern 3: vendor-YYYYMMDD-amount[-construction] (dash separator)
+    pattern_dash = re.compile(
+        r"^(?P<vendor>.+?)-(?P<date>\d{8})-(?P<amount>[\d,，]+)(?:-(?P<construction>.+))?$"
+    )
+    m = pattern_dash.match(stem)
+    if m:
+        vendor = m.group("vendor")
+        date_str = m.group("date")
+        amount_str = m.group("amount").replace(",", "").replace("，", "")
+
+        if deny_re and deny_re.search(vendor):
+            return None
+
+        try:
+            amount = int(amount_str)
+            return ExtractedPdfFields(
+                vendor=vendor,
+                issue_date=date_str,
+                amount=amount,
+                invoice_no=None,
+            )
+        except ValueError:
+            pass
+
+    # Pattern 4: vendor_YYYY.MM.DD_amount[_construction] (dot-date)
+    pattern_dot = re.compile(
+        r"^(?P<vendor>.+?)_(?P<year>\d{4})\.(?P<month>\d{1,2})\.(?P<day>\d{1,2})_(?P<amount>[\d,，]+)(?:_(?P<construction>.+))?$"
+    )
+    m = pattern_dot.match(stem)
+    if m:
+        vendor = m.group("vendor")
+        year = m.group("year")
+        month = m.group("month").zfill(2)
+        day = m.group("day").zfill(2)
+        date_str = f"{year}{month}{day}"
+        amount_str = m.group("amount").replace(",", "").replace("，", "")
+
+        if deny_re and deny_re.search(vendor):
+            return None
+
+        try:
+            amount = int(amount_str)
+            return ExtractedPdfFields(
+                vendor=vendor,
+                issue_date=date_str,
+                amount=amount,
+                invoice_no=None,
+            )
+        except ValueError:
+            pass
+
+    # Pattern 5: YYYY,MM,DDvendoramount.pdf (legacy comma format)
+    # Example: 2025,12,27名鉄協商400.pdf
+    pattern_legacy = re.compile(
+        r"^(?P<year>\d{4}),(?P<month>\d{1,2}),(?P<day>\d{1,2})(?P<vendor>[^\d]+)(?P<amount>[\d,，]+)$"
+    )
+    m = pattern_legacy.match(stem)
+    if m:
+        vendor = m.group("vendor")
+        year = m.group("year")
+        month = m.group("month").zfill(2)
+        day = m.group("day").zfill(2)
+        date_str = f"{year}{month}{day}"
+        amount_str = m.group("amount").replace(",", "").replace("，", "")
+
+        if deny_re and deny_re.search(vendor):
+            return None
+
+        try:
+            amount = int(amount_str)
+            return ExtractedPdfFields(
+                vendor=vendor,
+                issue_date=date_str,
+                amount=amount,
+                invoice_no=None,
+            )
+        except ValueError:
+            pass
+
+    return None
+
+
+def _correct_vendor_ocr(vendor: str) -> str:
+    """Apply known OCR misrecognition corrections to vendor name."""
+    for wrong, correct in VENDOR_OCR_CORRECTIONS.items():
+        if wrong in vendor:
+            vendor = vendor.replace(wrong, correct)
+    return vendor
+
+
 def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> ExtractedPdfFields | None:
     text = _normalize_text(text)
+    # Normalize spaced-out CJK characters (PDF text extraction artifact).
+    # Example: "東 海 イ ン プ ル 建 設" → "東海インプル建設"
+    text = re.sub(r"(?<=[^\x00-\x7f]) (?=[^\x00-\x7f])", "", text)
+    # Fix common OCR reversals (e.g. some OCR engines reverse "株式会社" to "会社株式").
+    text = text.replace("会社株式", "株式会社")
+    # Normalize spaced commas inside numbers: "1, 651,980" → "1,651,980"
+    text = re.sub(r"(\d),\s+(\d)", r"\1,\2", text)
     deny_re = re.compile(company_deny_regex) if company_deny_regex else None
 
     # Vendor candidate lines (prefer early, exclude recipient markers).
@@ -1108,6 +1414,10 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
             candidate = deny_re.sub(" ", candidate).strip()
             if not candidate:
                 continue
+            # Skip if only a bare corporate suffix remains (no actual company name).
+            # e.g. "(株)" or "株式会社" alone after removing the recipient company name.
+            if re.fullmatch(r"[（(](?:株|有|合)[）)]|株式会社|有限会社|合同会社", candidate):
+                continue
 
         # Remove common prefixes like "発行元:" / "会社名:" etc.
         candidate = re.sub(
@@ -1117,6 +1427,12 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
         ).strip()
 
         if not VENDOR_HINT_RE.search(candidate):
+            continue
+        # Truncate at postal-code / contact-info markers (OCR often runs company name
+        # and address onto the same line with no separator).
+        if "〒" in candidate:
+            candidate = candidate[: candidate.index("〒")].strip()
+        if not candidate:
             continue
         vendor_candidates.append(candidate)
     vendor = vendor_candidates[0] if vendor_candidates else None
@@ -1138,6 +1454,56 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
         if len(uniq) == 1:
             issue_date = uniq[0]
 
+    if not issue_date:
+        # Wareki (Japanese era year) support.  Reiwa (令和) started May 2019;
+        # western_year = era_year + 2018.
+        #
+        # Step 1: prefer a date that is preceded by a date-label keyword
+        # (e.g. "請求年月日:令和7年12月25日").  This avoids accidentally picking
+        # up work-period start/end dates that appear earlier in the text.
+        _WAREKI_LABEL_RE = re.compile(
+            r"(?:請求(?:年月)?日|発行(?:年月)?日|作成(?:年月)?日|日付)\s*[:：]?\s*"
+            r"(?:令和\s*|R\s*)?([0-9]{1,2})\s*年\s*([0-9]{1,2})\s*月\s*([0-9]{1,2})\s*日"
+        )
+        for wm in _WAREKI_LABEL_RE.finditer(text):
+            era_y, mo, d = int(wm.group(1)), int(wm.group(2)), int(wm.group(3))
+            if 1 <= era_y <= 20 and 1 <= mo <= 12 and 1 <= d <= 31:
+                western_y = 2018 + era_y
+                issue_date = f"{western_y:04}{mo:02}{d:02}"
+                break
+
+    if not issue_date:
+        # Step 2: unlabeled wareki date, but skip dates followed by "~" / "〜" / "迄"
+        # which indicate the start of a construction-period range, not an invoice date.
+        _WAREKI_RE = re.compile(
+            r"(?:令和\s*|R\s*)?([0-9]{1,2})\s*年\s*([0-9]{1,2})\s*月\s*([0-9]{1,2})\s*日"
+        )
+        for wm in _WAREKI_RE.finditer(text):
+            after = text[wm.end() : wm.end() + 10].lstrip()
+            if after and after[0] in "~〜迄":
+                continue  # skip range-start dates
+            era_y, mo, d = int(wm.group(1)), int(wm.group(2)), int(wm.group(3))
+            if 1 <= era_y <= 20 and 1 <= mo <= 12 and 1 <= d <= 31:
+                western_y = 2018 + era_y
+                issue_date = f"{western_y:04}{mo:02}{d:02}"
+                break
+
+    if not issue_date:
+        # Step 3: OCR sometimes drops the 月 character and spaces out the remaining
+        # digits, e.g. "7年1 2 2 5 日締切分" (should be "令和7年12月25日").
+        # Detect the pattern N年 d d d d 日 and interpret the 4 digits as MMDD.
+        _WAREKI_SPACED_RE = re.compile(
+            r"([0-9]{1,2})\s*年\s*([0-9])\s+([0-9])\s+([0-9])\s+([0-9])\s*日"
+        )
+        for wm in _WAREKI_SPACED_RE.finditer(text):
+            era_y = int(wm.group(1))
+            mmdd = wm.group(2) + wm.group(3) + wm.group(4) + wm.group(5)
+            mo, d = int(mmdd[:2]), int(mmdd[2:])
+            if 1 <= era_y <= 20 and 1 <= mo <= 12 and 1 <= d <= 31:
+                western_y = 2018 + era_y
+                issue_date = f"{western_y:04}{mo:02}{d:02}"
+                break
+
     # Amount (prefer labeled by priority; fallback to numbers with comma + 円).
     #
     # Priority matters because invoices can contain multiple amounts such as:
@@ -1156,7 +1522,9 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
     for m in AMOUNT_LABEL_RE.finditer(text):
         label = m.group(1)
         raw = m.group(2).replace(",", "").strip()
-        if raw.isdigit():
+        # Skip 0-yen values: labels like "前回御請求額" contain "請求額" as a
+        # substring and the adjacent cell often holds 0 (no carry-over balance).
+        if raw.isdigit() and int(raw) > 0:
             candidates.append((_amount_label_priority(label), int(raw)))
 
     if candidates:
@@ -1191,6 +1559,10 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
 
     if not vendor or not issue_date or amount is None:
         return None
+
+    # Apply OCR corrections to vendor name (pdf-ocr Skill).
+    vendor = _correct_vendor_ocr(vendor)
+
     return ExtractedPdfFields(vendor=vendor, issue_date=issue_date, amount=amount, invoice_no=invoice_no)
 
 
@@ -1237,6 +1609,8 @@ def _load_config(path: Path) -> ToolConfig:
                 else None
             ),
             mark_as_read_on_success=bool(outlook_raw.get("mark_as_read_on_success", False)),
+            use_flag_status=bool(outlook_raw.get("use_flag_status", False)),
+            mark_flag_on_success=bool(outlook_raw.get("mark_flag_on_success", False)),
         )
         if not outlook.folder_path:
             raise ValueError("config.outlook.folder_path が空です。")
@@ -1295,6 +1669,7 @@ def _load_config(path: Path) -> ToolConfig:
                 else None
             ),
             max_pages=int(rename_raw.get("max_pages", 2)),
+            filename_first=bool(rename_raw.get("filename_first", True)),
         )
 
     cfg = ToolConfig(
@@ -1594,17 +1969,101 @@ def _decrypt_pdf(src: Path, dst: Path, password: str) -> None:
         writer.write(f)
 
 
-def _candidate_passwords_for_time(
+def _extract_email_address(email_str: str) -> str:
+    """Extract email address from various formats.
+
+    Handles:
+    - Plain: user@example.com
+    - Display name: Name <user@example.com>
+    - Edge cases: trailing/leading spaces, quotes
+
+    Returns lowercase email or empty string if no @ found.
+    """
+    text = (email_str or "").strip()
+    # Remove quotes
+    text = text.strip('"\'')
+
+    # Extract from "Name <email>" format
+    if "<" in text and ">" in text:
+        start = text.find("<")
+        end = text.find(">", start)
+        text = text[start + 1:end].strip()
+
+    text = text.lower()
+    return text if "@" in text else ""
+
+
+def _extract_email_domain(email_str: str) -> str:
+    """Extract domain from email address (e.g., 'user@example.com' -> 'example.com')"""
+    addr = _extract_email_address(email_str)
+    if not addr or "@" not in addr:
+        return ""
+    return addr.split("@", 1)[-1]
+
+
+def _candidate_passwords_with_fallback(
     target_time: datetime,
+    target_sender: str,
     notes: Sequence[PasswordNote],
-    window_minutes: int,
+    log_path: Path,
 ) -> list[str]:
-    win = timedelta(minutes=window_minutes)
-    scored: list[tuple[float, str]] = []
+    """Find password candidates using staged fallback strategy.
+
+    Stage 1: Strict - 30 sec + exact sender match
+    Stage 2: Relaxed - 3 min + domain match
+    Stage 3: Last resort - 10 min + time only (max 5 candidates)
+
+    Returns list of password candidates (empty if none found).
+    """
+    target_addr = _extract_email_address(target_sender)
+    target_domain = _extract_email_domain(target_sender)
+
+    # Stage 1: 30 seconds + exact sender match
+    stage1_window = timedelta(seconds=30)
+    stage1_candidates: list[tuple[float, str]] = []
+    for n in notes:
+        note_addr = _extract_email_address(n.sender)
+        if target_addr and note_addr and target_addr == note_addr:
+            dt = abs((n.received_time - target_time).total_seconds())
+            if dt <= stage1_window.total_seconds():
+                stage1_candidates.append((dt, n.password))
+
+    if stage1_candidates:
+        _append_log(log_path, f"[Password] Stage1 match: exact sender, {len(stage1_candidates)} candidates")
+        return _deduplicate_passwords(stage1_candidates)
+
+    # Stage 2: 3 minutes + domain match
+    stage2_window = timedelta(minutes=3)
+    stage2_candidates: list[tuple[float, str]] = []
+    for n in notes:
+        note_domain = _extract_email_domain(n.sender)
+        if target_domain and note_domain and target_domain == note_domain:
+            dt = abs((n.received_time - target_time).total_seconds())
+            if dt <= stage2_window.total_seconds():
+                stage2_candidates.append((dt, n.password))
+
+    if stage2_candidates:
+        _append_log(log_path, f"[Password] Stage2 match: domain only, {len(stage2_candidates)} candidates")
+        return _deduplicate_passwords(stage2_candidates)
+
+    # Stage 3: 10 minutes + time only (last resort)
+    stage3_window = timedelta(minutes=10)
+    stage3_candidates: list[tuple[float, str]] = []
     for n in notes:
         dt = abs((n.received_time - target_time).total_seconds())
-        if dt <= win.total_seconds():
-            scored.append((dt, n.password))
+        if dt <= stage3_window.total_seconds():
+            stage3_candidates.append((dt, n.password))
+
+    if stage3_candidates:
+        _append_log(log_path, f"[Password] Stage3 match: time only, {len(stage3_candidates)} candidates")
+        return _deduplicate_passwords(stage3_candidates)
+
+    _append_log(log_path, "[Password] No candidates found in all stages")
+    return []
+
+
+def _deduplicate_passwords(scored: list[tuple[float, str]]) -> list[str]:
+    """Deduplicate and return passwords sorted by time delta."""
     scored.sort(key=lambda x: (x[0], x[1]))
     uniq: list[str] = []
     seen: set[str] = set()
@@ -1797,10 +2256,11 @@ def _process_saved_pdf_file(
 
     primary_path = pdf_path
     if was_encrypted:
-        passwords = _candidate_passwords_for_time(
+        passwords = _candidate_passwords_with_fallback(
             target_time=received_dt,
+            target_sender=sender,
             notes=password_notes,
-            window_minutes=cfg.decrypt_password_window_minutes,
+            log_path=log_path,
         )
         if not passwords:
             unresolved.append(
@@ -1841,13 +2301,34 @@ def _process_saved_pdf_file(
 
     # Rename/move based on PDF values (source of truth).
     if cfg.rename.enabled and (not was_encrypted or decrypted_path is not None):
-        fields = _extract_invoice_fields_from_pdf(
-            primary_path,
-            company_deny_regex=cfg.rename.company_deny_regex,
-            max_pages=cfg.rename.max_pages,
-            run_dir=run_dir,
-            log_path=log_path,
-        )
+        fields = None
+        extraction_source = "none"
+
+        # 1. Try filename-first extraction (if enabled)
+        if cfg.rename.filename_first:
+            fields = _extract_invoice_fields_from_filename(
+                attachment_name,
+                company_deny_regex=cfg.rename.company_deny_regex,
+            )
+            if fields is not None:
+                extraction_source = "filename"
+                _append_log(
+                    log_path,
+                    f"[INFO] Extracted from filename: vendor={fields.vendor}, date={fields.issue_date}, amount={fields.amount}",
+                )
+
+        # 2. Fallback to PDF extraction
+        if fields is None:
+            fields = _extract_invoice_fields_from_pdf(
+                primary_path,
+                company_deny_regex=cfg.rename.company_deny_regex,
+                max_pages=cfg.rename.max_pages,
+                run_dir=run_dir,
+                log_path=log_path,
+            )
+            if fields is not None:
+                extraction_source = "pdf"
+
         if fields is None:
             unresolved.append(
                 f"PDFからリネーム用の値（会社名/日付/金額）を確定できません: {primary_path.name} (subject={subject})"
@@ -2288,6 +2769,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             items = kept
             _append_log(log_path, f"filtered by received_within_days: {len(items)}")
 
+        # Restrict by FlagStatus if configured.
+        if outlook_cfg.use_flag_status:
+            kept = []
+            flag_read_errors = 0
+            for it in items:
+                try:
+                    flag_status = int(it.FlagStatus)
+                except Exception as e:
+                    flag_status = -1  # Safe: skip this mail (don't accidentally re-process)
+                    flag_read_errors += 1
+                    _append_log(log_path, f"[WARN] FlagStatus read failed for message, skipping: {e}")
+                if flag_status == 0:  # No flag = unprocessed
+                    kept.append(it)
+            items = kept
+            _append_log(log_path, f"filtered by FlagStatus (unprocessed only): {len(items)}, skipped_due_to_read_error: {flag_read_errors}")
+
         password_notes: list[PasswordNote] = []
         candidates: list[Any] = []
         scanned = 0
@@ -2308,9 +2805,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     body = ""
                 pw = _extract_password(body)
                 rt = _safe_received_time(it)
+                sender = _safe_sender(it)
                 if pw and rt:
                     password_notes.append(
-                        PasswordNote(received_time=rt, subject=subject, password=pw)
+                        PasswordNote(received_time=rt, subject=subject, password=pw, sender=sender)
                     )
             candidates.append(it)
 
@@ -2363,7 +2861,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                             subject=subject,
                             sender=sender,
                             received_time=rt_s,
-                            urls=tuple(urls),
+                            urls=tuple(_mask_url(u) for u in urls),
                         )
                     )
                 continue
@@ -2460,10 +2958,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 _ensure_dir(extracted_dir)
 
-                pw_candidates = _candidate_passwords_for_time(
+                pw_candidates = _candidate_passwords_with_fallback(
                     target_time=rt_dt,
+                    target_sender=sender,
                     notes=password_notes,
-                    window_minutes=cfg.decrypt_password_window_minutes,
+                    log_path=log_path,
                 )
                 attempts: list[str | None] = [None] + list(pw_candidates)
                 extracted_pdfs: list[Path] = []
@@ -2536,7 +3035,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         subject=subject,
                         sender=sender,
                         received_time=rt_s,
-                        urls=tuple(urls),
+                        urls=tuple(_mask_url(u) for u in urls),
                     )
                 )
 
@@ -2556,6 +3055,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                     _append_log(
                         log_path,
                         f"[WARN] failed to mark as read: entry_id={entry_id} error={e}",
+                    )
+
+            # Set FlagStatus = 2 (red flag) on successful processing.
+            if (
+                (not dry_run)
+                and bool(outlook_cfg.mark_flag_on_success)
+                and attachments_saved > 0
+                and len(unresolved) == unresolved_before_mail
+            ):
+                try:
+                    it.FlagStatus = 2
+                    it.Save()
+                    _append_log(log_path, f"marked with red flag: entry_id={entry_id}")
+                except Exception as e:
+                    _append_log(
+                        log_path,
+                        f"[WARN] failed to set flag: entry_id={entry_id} error={e}",
                     )
 
         # Merge/Print targets (prefer decrypted if exists). Skip existence checks in dry-run/scan.

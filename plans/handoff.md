@@ -94,6 +94,82 @@ GAS + HTML SPAの建築士試験トレーニングアプリ。本番運用中、
 
 - **Skill**: `.claude/skills/gas-webapp/SKILL.md`
 - **Deploy**: `clasp deploy -i AKfycbxVu6IgDAj5lbx9KCVEwsTC-GdG1-H5oYAOotW0x7DdBesM2UrpNkF0KRhliPi0Q-zUcg`
+- **Local**: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\archi-16w-training\`
+- **Script ID**: `1motaJbvF20EZpq7HD-dPbpUHNK9Zc_U31C5DG4diXL37VrCRguzSve38`
+
+### doboku-14w-training トレーニングアプリ
+**Status**: ✅ データ生成完了 — GASデータ投入待ち（2026-02-14 15:45）
+
+**プロジェクト概要**:
+- **目的**: 1級土木施工管理技士 第一次検定対策トレーニングアプリ
+- **ベース**: archi-16w-training をクローン（GAS + HTML SPA構成）
+- **試験日**: 2026年7月5日（日）
+- **学習期間**: 2026年4月1日～7月5日（14週間）
+- **GAS Project ID**: `1giv21Jbc8lSmC8fQ3TDJ6gNP7-nH2m2KnPAYebhd0rK8B65gc0mvFzKS`
+- **Deploy URL**: https://script.google.com/macros/s/AKfycbxYGzBsVoGisFV9J8eHglolWSI86UWOWzGRidWKh88bOxNgOMtWkyj_IcKAbj315bj6/exec
+
+**今セッション完了（2026-02-14 13:00-15:45）**:
+
+1. **GASプロジェクトクローン完了**:
+   - archi-16w-training → doboku-14w-training
+   - `clasp create` 実行、新規scriptId取得
+   - `setup()` 実行成功、データベース作成: `Doboku14W_DB_20260214`
+   - Web App デプロイ完了、URL発行済み
+
+2. **QuestionBankデータ作成完了**:
+   - docxファイル解析（R1-R7、問題A/B）
+   - 全682問パース完了（R1-R5: 96問/年、R6-R7: 101問/年）
+   - 解答統合100%（R4/R5/R6は手動入力、他は自動抽出）
+   - CSV出力: `tools/questionbank_complete.csv` (683行: ヘッダー1 + 問題682)
+
+3. **TestPlan14データ作成完了**:
+   - 28テスト定義（14週×2テスト/週）
+   - Week 1-7: R7→R1 初回学習（メイン: 問題A 1-20問、補助: 問題B 1-20問）
+   - Week 8-14: 復習サイクル（TBD: 弱点タグベース/応用問題）
+   - CSV出力: `tools/testplan14.csv` (29行: ヘッダー1 + テスト28)
+
+4. **UI文言更新完了**:
+   - `index.html`: title更新（1級建設管理技士 → 1級土木施工管理技士）
+   - `Code.gs`: setTitle更新
+   - `logic.gs`: Geminiプロンプト更新
+   - 「建築学等」→「土木工学等」に一括置換
+
+5. **GASコードプッシュ完了**:
+   - `clasp push` 実行（7ファイル更新）
+
+6. **スキル・決定ログ更新**:
+   - `.claude/skills/gas-webapp/SKILL.md`: Section 9 (Project Cloning) 追加
+   - `plans/decisions/projects/doboku-14w-training.md`: 設計判断記録
+
+**Next Steps（手動作業）**:
+
+| タスク | 詳細 | 手順書 |
+|--------|------|--------|
+| 1. データベースURL取得 | GAS Editorで `checkDatabaseStatus()` 実行 → dbUrl確認 | `tools/upload_to_gas.py` |
+| 2. QuestionBank CSV投入 | スプレッドシートに682問インポート | 同上 |
+| 3. TestPlan14 CSV投入 | スプレッドシートに28テストインポート | 同上 |
+| 4. 動作確認 | Deploy URLでトップページ確認、Week 1テスト開始確認 | 同上 |
+
+**Risks / 要調整項目**:
+
+1. **試験構成の詳細調整が必要**:
+   - 現在の実装は建築施工管理技士の試験構成（午前44問+午後28問）をベース
+   - 土木の実際の構成に合わせて以下を調整する可能性:
+     - `Code.gs` の `getTagByNumber_()` 関数（問題番号→タグ推定）
+     - `index.html` の試験構成説明テーブル
+   - 現時点では「土木工学等」など仮のタグを使用
+
+2. **Week 8-14の復習サイクルが未実装**:
+   - TestPlan14にプレースホルダーは作成済み（"TBD"）
+   - 実際の復習問題選定ロジック（弱点タグベース）は未実装
+
+**Key Files**:
+- プロジェクト: `C:\ProgramData\Generative AI\Github\doboku-14w-training\`
+- QuestionBank CSV: `tools/questionbank_complete.csv` (682問)
+- TestPlan14 CSV: `tools/testplan14.csv` (28テスト)
+- Upload手順書: `tools/upload_to_gas.py`
+- Skill: `.claude/skills/gas-webapp/SKILL.md` (Section 9: Project Cloning)
+- Decisions: `plans/decisions/projects/doboku-14w-training.md`
 
 ### OCR Gemini マルチモーダル検証
 **Status**: PoC完了・クローズ — 客先ではGemini不使用（API課金禁止）
@@ -200,28 +276,215 @@ Windows環境でChromaDB無効のためFTS5テキスト検索のみだが、work
 - Result: `data\result\scenario51_result_2026-01.json` (total_amount: 259,028円)
 
 ### シナリオ12・13（受信メールのPDFを保存・一括印刷）
-**Status**: ツール実装/書き起こし/設定たたき台 完了。残は本番Outlook環境での「ストア名/フォルダパス確定」とE2E検証。
+**Status**: ⚠️ OCR改善適用済み・未検証 — pdf-ocr Skill統合完了（2026-02-18）
 
-**Done**:
-- Outlook COM でメール走査 → PDF添付保存 →（必要なら）復号/結合/印刷 → レポート出力 → 完了/エラー通知 まで実装。
-- 保存先（UNC）の実在に合わせて config を更新。
-- 書き起こし(runbook)を作成。
+**今セッション完了（2026-02-18）**:
+
+1. **G8/C2/G2/G9/G5/G3 完了**（前セッションから継続）
+2. **pdf-ocr Skill統合（external-repos/my-claude-skills/pdf-ocr/templates/ 使用）**:
+   - Phase1: DPI最適化（Tesseract 200/250/300、YomiToku 200/300、EasyOCR 200/300）
+   - Phase2: EasyOCRをカスケードstep 3.5に追加（既存関数を接続）
+   - Phase3: VENDOR_OCR_CORRECTIONS辞書追加（"緑エキスパート"→"縁エキスパート"）
+   - **Phase4**: `_preprocess_png_for_ocr()` 追加 — pdf_preprocess.pyのdeskew（Hough変換）+影除去をTesseract/EasyOCRに適用
+3. **SKILL.mdゲート追加**: pdf-ocr SKILL.md先頭に実装ファイル確認を必須化
+4. **MEMORY.md記録**: "Skill application = use the implementation code, not just the docs"
+
+**ゲート状態**:
+| # | ゲート | 状態 |
+|---|--------|------|
+| G1 | routing実装（LCS+3gram） | ❌ 未実装 |
+| G2 | filename-first抽出実装 | ✅ 完了 |
+| G3 | --execute パイロット | ✅ 完了（OCR改善前） |
+| G4 | Flag運用の藤田さん合意 | ❌ 未合意 |
+| G5 | report.jsonのURLマスキング | ✅ 完了 |
+| G6 | Runbook V1-V8検証 | ❌ 未検証 |
+| G7 | 冪等性テスト | ❌ 未実施 |
+| G8 | 全163件ファイル名規約適合率 | ✅ 完了（66.4%） |
+| G9 | FlagStatus安全フォールバック | ✅ 完了 |
+| G10 | 本番config preflight | ❌ 未実施 |
+
+**Next（次セッション最優先）**:
+- OCR改善後テスト未実施 → `--execute` on 202512フォルダで精度確認
+- G1 routing実装（LCS+3gram）
+- 藤田さんFlagStatus運用合意（G4）
+
+**今セッション完了（2026-02-14 15:45-17:30）**:
+
+1. **バッチファイル作成完了**（シナリオ44と同じパターン）:
+   - `scenario/1_テスト実行.bat` — tool_config_test.json使用、既定ドライラン
+   - `scenario/2_本番実行.bat` — tool_config_prod.json使用、本番実行
+   - `scenario/_test_batch.bat` — 環境セットアップ検証用
+   - `scenario/README.md` — 使い方ガイド、設定説明、トラブルシューティング
+
+2. **Outlook COM接続確認済み**:
+   - `--list-outlook-stores` 成功（`seikyu.tic@tokai-ic.co.jp`アクセス可能）
+   - スクリプト構文チェック合格
+   - BOM付きJSON読み込み対応確認（`utf-8-sig`使用）
+
+3. **重要な発見: 設計の相違**
+
+| 項目 | 現在の実装 | ヒアリング内容（2/13 藤田さん） |
+|------|----------|-------------------------------|
+| フォルダ作成 | **自動作成**（PDF内vendor名で） | **既存フォルダに振り分け**（工事名で） |
+| マッチング | vendor名完全抽出 | **3文字一致ルール** |
+| 不明時 | エラー停止 | 「その他」フォルダに保存 |
+
+**現在の実装**:
+- PDFから vendor（業者名）を自動抽出
+- フォルダ構造: `save_dir/{vendor_short}/{vendor_short}__{issue_date}__{amount}.pdf`
+- 例: `経理\請求書【現場】\モビテック\モビテック__20250213__123456円.pdf`
+
+**ヒアリング内容**:
+- 既存フォルダ名（工事名など）と3文字一致でマッチング
+- PDF内容と既存フォルダ名を比較して振り分け
+- 判断できないものは「その他」フォルダに保存
+
+**Next Steps（優先度順）**:
+
+1. **藤田さんからの動画待ち** — Power Automate Desktop録画で実際の操作フローを確認
+2. **実装方針決定**:
+   - **案A（拡張）**: 既存vendor抽出 + 3文字一致ロジック追加
+   - **案B（新規）**: 動画ベースで工事名マッチング新規実装
+3. **設定ファイル拡張**（案A選択時）:
+   - `existing_folders_root`: 既存フォルダのルートパス
+   - `match_threshold`: 一致文字数閾値（デフォルト3）
+   - `unknown_folder`: 不明時の退避先（デフォルト「その他」）
 
 **Blocker / Risk**:
-- この実行環境のOutlook COMではストア一覧が `masamaru1975@hotmail.com` のみで、設定の `\\\\RK用の経理\\\\受信トレイ` が解決できない。
-  - 原因はネットワークというより「そのPCのOutlookプロファイルに共有メールボックス（RK用の経理）が設定されていない/見えていない」可能性が高い。
-- URLのみ（Web請求サービス）メールは未自動化のため、検知したら停止して通知する（`fail_on_url_only_mail=true`）。
+- **設計相違**: 現在の実装は「業者名ベース」、要件は「工事名ベース」
+- **3文字一致の曖昧性**: 複数フォルダが一致する可能性 → 一致文字数が多い方を優先、同数なら「その他」
+- URLのみ（Web請求サービス）メールは未自動化のため、検知したら停止して通知する（`fail_on_url_only_mail=true`）
 
-**Next**（本番PCで実施）:
-1. `python C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\outlook_save_pdf_and_batch_print.py --list-outlook-stores`
-2. `python C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\outlook_save_pdf_and_batch_print.py --list-outlook-folders \"\\\\<Store>\"`
-3. `C:\\ProgramData\\RK10\\Robots\\12・13受信メールのPDFを保存・一括印刷\\config\\tool_config_prod.json` の `outlook.folder_path`（と必要なら `profile_name`）を確定値へ更新。
-4. `--scan-only` → `--execute --max-messages 3` →（最後に）印刷あり、の順で段階検証。
+**Key Files**:
+- ドキュメント: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\docs\s12_13_outlook_pdf_save_and_batch_print.md`
+- README: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\scenario\README.md`
+- バッチ（テスト）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\scenario\1_テスト実行.bat`
+- バッチ（本番）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\scenario\2_本番実行.bat`
+- 検証バッチ: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\scenario\_test_batch.bat`
+- メインツール: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py`
+- Config（テスト）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config_test.json`
+- Config（本番）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config_prod.json`
+- Artifacts: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\artifacts\run_YYYYMMDD_HHMMSS\`
 
-**Key files**:
-- Tool: `C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\outlook_save_pdf_and_batch_print.py`
-- Mail helper: `C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\common\\email_notifier.py`
-- Runbook: `C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\docs\\runbooks\\s12_13_outlook_pdf_save_and_batch_print.md`
-- Prod config: `C:\\ProgramData\\RK10\\Robots\\12・13受信メールのPDFを保存・一括印刷\\config\\tool_config_prod.json`
-- Test config: `C:\\ProgramData\\RK10\\Robots\\12・13受信メールのPDFを保存・一括印刷\\config\\tool_config_test.json`
-- Artifacts: `C:\\ProgramData\\RK10\\Robots\\12・13受信メールのPDFを保存・一括印刷\\artifacts\\run_YYYYMMDD_HHMMSS\\`
+---
+
+## 今セッション (2026-02-17)
+
+### 1. rpa-workflows リポジトリ作成完了
+**Status**: ✅ 完了 — GitHub push済み
+
+**プロジェクト概要**:
+- **リポジトリ**: `https://github.com/bubbleberry247/rpa-workflows` (private)
+- **目的**: RPA自動化プロジェクトの標準構成テンプレート
+- **構成**: RK10シナリオ + Playwright（4サービス） + Python ツール + CI/CD
+
+**完了内容**:
+1. **ディレクトリ構造作成**:
+   - `rk10/scenarios/` — RK10シナリオ格納
+   - `playwright/rakuraku-seisan/`, `recoru/`, `drive-report/`, `softbank-portal/` — サービス別Playwrightテスト
+   - `python/` — Python自動化スクリプト
+   - `tests/` — テストスイート
+   - `.github/workflows/` — CI/CD定義
+
+2. **設定ファイル作成**:
+   - `.gitignore` — Python/Node/RK10/credentials除外
+   - `README.md` — 技術スタック、セットアップ手順、開発ガイドライン
+   - `requirements.txt` — Python依存関係（playwright, openpyxl, xlwings, pywinauto, easyocr, PyMuPDF）
+   - `.env.example` — 環境変数テンプレート（4サービス認証情報、PROD/LOCAL切替）
+   - `playwright/package.json` — サービス別npm scripts
+   - `playwright/playwright.config.ts` — RPA最適化設定（headless:false、1920x1080、30s timeout、sequential実行）
+
+3. **Git操作完了**:
+   - 初回コミット（18ファイル、521行）
+   - GitHub作成（`bubbleberry247/rpa-workflows`）
+   - push完了
+
+**Key Files**:
+- Repository: `https://github.com/bubbleberry247/rpa-workflows`
+- Local: `C:\ProgramData\Generative AI\Github\rpa-automation\` (rpa-workflowsとしてpush)
+
+### 2. doboku-14w-training データ収集進捗更新
+**Status**: ⚠️ 残り5問 — Claude for Chrome実行待ち
+
+**完了内容**:
+1. **グループ6完了**（17問）:
+   - Word文書のチェックリスト更新
+   - グループ6ステータス: "一部不完全（17問）- 残り3個を収集" → "✅完了（17問）"
+
+2. **全体進捗分析**:
+   - 総問題数: **159問**
+   - 完了: **154問**（97%）
+   - 不完全: **5問**（3%）
+   - 不完全問題の内訳:
+     - **グループA（全フィールド収集）**: 3問
+       - R1gakkaA-050（R1 選択肢50）
+       - R1gakkaA-056（R1 選択肢56）
+       - R6gakkaB-025（R6 必須25）
+     - **グループB（一部補完）**: 2問
+       - R6gakkaA-031（R6 問題A 31）— explainLongのみ必要
+       - R6gakkaB-022（R6 問題B 22）— explainD完成 + explainShort/Long必要
+
+3. **Claude for Chrome用プロンプト作成**:
+   - ファイル: `C:\Users\masam\Downloads\claude_chrome_prompt_残り5問.txt`
+   - 参照サイト: `https://kakomonn.com/doboku-1/`
+   - データ形式: パイプ区切り（`|`）
+   - 挿入位置指定: グループA（新規行追加）、グループB（既存行編集）
+
+**Next Steps**:
+1. **Claude for Chrome実行**:
+   - プロンプトファイルを読み込み
+   - kakomonn.com から5問の説明文を収集
+   - Word文書に反映
+
+2. **完了確認**:
+   - 全159問が完全になったことを確認
+   - パイプ区切り形式が正しいことを確認
+   - Ctrl+S で保存
+
+**Key Files**:
+- Word文書: `C:\Users\masam\Downloads\無題のドキュメント (1).docx`
+- プロンプト: `C:\Users\masam\Downloads\claude_chrome_prompt_残り5問.txt`
+- QuestionBank CSV: `C:\ProgramData\Generative AI\Github\doboku-14w-training\tools\questionbank_complete.csv`
+
+### 3. シナリオ12&13 教師データPSTインポート＆Dry-Run
+**Status**: ✅ PSTインポート完了・Dry-Run成功（2026-02-17）
+
+**完了内容（2026-02-17）**:
+
+1. **PSTインポート完了**:
+   - ファイル: `backup.pst`（1.7GB）、パスワード: `1`
+   - インポート先: `seikyu.tic@tokai-ic.co.jp\受信トレイ`（サブフォルダではなく直接）
+   - 107通インポート成功
+   - **注意**: 受信トレイはサーバーサイドフォルダ（ドラッグ＆ドロップではpermissionエラーが出るが、インポートウィザード経由では書込可能）
+
+2. **Config更新**:
+   - `tool_config_test.json` の `folder_path` を `\\seikyu.tic@tokai-ic.co.jp\受信トレイ` に変更
+   - `[テスト]教師データ` サブフォルダは削除済み（permission問題のため受信トレイ直下に統一）
+   - `unread_only: false`, `use_flag_status: true` — FlagStatusで処理済み/未処理を管理
+
+3. **Dry-Run テスト成功**:
+   - 179通読み込み → 151通（FlagStatusフィルタ後）→ 125通候補（件名フィルタ後）→ 163件添付ファイル検出（PDF+ZIP）
+   - エラー: 0件
+   - 結果: success
+   - ログ: `artifacts/run_20260217_233052/run.log`
+
+**Next Steps（優先度順）**:
+
+1. **`--execute` テスト実行** — 実際にPDF保存＋リネーム処理を確認（ユーザー承認後）
+2. **設計相違の解決** — 現在のvendor名ベースのフォルダ作成 vs 藤田さん要件の3文字マッチング（工事名フォルダ振り分け）
+3. **藤田さんからの動画待ち** — Power Automate Desktop録画で実際の操作フローを確認
+
+**設計相違（未解決）**:
+
+| 項目 | 現在の実装 | ヒアリング内容（2/13 藤田さん） |
+|------|----------|-------------------------------|
+| フォルダ作成 | **自動作成**（PDF内vendor名で） | **既存フォルダに振り分け**（工事名で） |
+| マッチング | vendor名完全抽出 | **3文字一致ルール** |
+| 不明時 | エラー停止 | 「その他」フォルダに保存 |
+
+**Key Files**:
+- メインツール: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py`
+- Config（テスト）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config_test.json`
+- Config（本番）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config.json`
+- バッチ（テスト）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\scenario\1_テスト実行.bat`
+- Artifacts: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\artifacts\`

@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "jobId": "rakuraku-expense-approval",
+  "paths": {
+    "queueRoot": "\\\\server\\share\\rpa-queue",
+    "artifactsRoot": "C:\\ProgramData\\RPA\\artifacts",
+    "inputDir": "C:\\ProgramData\\RPA\\input",
+    "outputDir": "C:\\ProgramData\\RPA\\output"
+  },
+  "credentials": {
+    "rakuraku": {
+      "companyCode": "${RAKURAKU_COMPANY_CODE}",
+      "userId": "${RAKURAKU_USER_ID}",
+      "passwordEnvVar": "RAKURAKU_PASSWORD"
+    }
+  },
+  "timeouts": {
+    "default": 30000,
+    "navigation": 60000,
+    "api": 10000
+  },
+  "retry": {
+    "maxAttempts": 3,
+    "backoff": "exponential",
+    "initialDelay": 1000
+  },
+  "evidence": {
+    "trace": "retain-on-failure",
+    "screenshot": "only-on-failure",
+    "video": "off",
+    "log": "info"
+  },
+  "playwright": {
+    "headless": true,
+    "slowMo": 0,
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    }
+  },
+  "queue": {
+    "workerId": "RPA-PC-01",
+    "heartbeatInterval": 30000,
+    "staleThreshold": 300000,
+    "pollingInterval": 5000
+  }
+}

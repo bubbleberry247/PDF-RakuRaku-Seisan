@@ -1,0 +1,152 @@
+# 期待される成果物ツリー例
+
+## 成功実行の例（最小セット）
+
+artifacts/
+└── rakuraku-expense-approval/
+    ├── 20260214-153042-abc123/              # runId
+    │   ├── metadata.json                    # status: "success"
+    │   ├── execution.log                    # ログ（INFO/WARNのみ）
+    │   ├── input/
+    │   │   ├── hash.txt                     # SHA-256: abc123...
+    │   │   └── sample.json                  # 入力データサンプル（個人情報マスク済み）
+    │   └── output/
+    │       └── expense-report.xlsx          # 出力ファイル
+    ├── latest -> 20260214-153042-abc123     # シンボリックリンク（最新）
+    └── last-success -> 20260214-153042-abc123  # シンボリックリンク（最終成功）
+
+サイズ: 約2MB（ログ1MB + 入力サンプル500KB + 出力500KB）
+
+---
+
+## 失敗実行の例（完全セット）
+
+artifacts/
+└── rakuraku-expense-approval/
+    ├── 20260214-160500-def456/              # runId（失敗）
+    │   ├── metadata.json                    # status: "failed", error: {...}
+    │   ├── execution.log                    # ログ（ERRORあり）
+    │   ├── trace.zip                        # Playwright trace（15MB）
+    │   ├── screenshots/
+    │   │   ├── error-001.png                # エラー画面1
+    │   │   └── error-002.png                # エラー画面2
+    │   ├── network/
+    │   │   └── trace.har                    # ネットワークログ（5MB）
+    │   ├── input/
+    │   │   ├── hash.txt
+    │   │   └── sample.json
+    │   └── dump/
+    │       └── error-page.html              # エラー時のHTML全体
+    ├── 20260214-153042-abc123/              # runId（過去の成功）
+    │   └── ...
+    ├── latest -> 20260214-160500-def456     # シンボリックリンク（最新=失敗）
+    └── last-success -> 20260214-153042-abc123  # シンボリックリンク（最終成功）
+
+サイズ: 約25MB（trace 15MB + HAR 5MB + screenshots 1MB + その他4MB）
+
+---
+
+## デバッグ実行の例（全証跡収集）
+
+artifacts/
+└── rakuraku-expense-approval/
+    └── 20260214-170000-ghi789/              # runId（デバッグ）
+        ├── metadata.json                    # status: "success"（デバッグ時でも成功）
+        ├── execution.log                    # DEBUGレベルログあり
+        ├── trace.zip                        # Playwright trace（20MB）
+        ├── screenshots/
+        │   ├── step-1-20260214170001.png    # 各ステップのスクリーンショット
+        │   ├── step-2-20260214170005.png
+        │   └── step-3-20260214170010.png
+        ├── videos/
+        │   └── recording-20260214170000.webm # 全画面録画（300MB）
+        ├── network/
+        │   └── trace.har                    # ネットワークログ（8MB）
+        ├── input/
+        │   ├── hash.txt
+        │   └── sample.json
+        └── output/
+            └── expense-report.xlsx
+
+サイズ: 約350MB（video 300MB + trace 20MB + HAR 8MB + その他22MB）
+
+---
+
+## 複数実行が混在する例
+
+artifacts/
+├── rakuraku-expense-approval/
+│   ├── 20260214-080000-aaa111/              # 朝の実行（成功）
+│   │   └── ...（最小セット）
+│   ├── 20260214-120000-bbb222/              # 昼の実行（成功）
+│   │   └── ...（最小セット）
+│   ├── 20260214-160000-ccc333/              # 夕方の実行（失敗）
+│   │   └── ...（完全セット）
+│   ├── 20260214-170000-ddd444/              # リトライ実行（成功）
+│   │   └── ...（最小セット）
+│   ├── latest -> 20260214-170000-ddd444
+│   └── last-success -> 20260214-170000-ddd444
+│
+└── recoru-holiday-registration/             # 別のジョブ
+    ├── 20260214-090000-eee555/
+    │   └── ...
+    ├── latest -> 20260214-090000-eee555
+    └── last-success -> 20260214-090000-eee555
+
+合計サイズ: 約100MB（4つの成功実行 2MB×3 + 1つの失敗実行 25MB + 1つの別ジョブ 2MB）
+
+---
+
+## クリーンアップ後の例（30日経過後）
+
+artifacts/
+└── rakuraku-expense-approval/
+    ├── 20260214-170000-ddd444/              # 30日以内（残存）
+    │   └── ...
+    ├── latest -> 20260214-170000-ddd444     # シンボリックリンク（残存）
+    └── last-success -> 20260214-170000-ddd444
+
+（20260214-080000-aaa111, 20260214-120000-bbb222, 20260214-160000-ccc333 は削除済み）
+
+---
+
+## zip化した失敗証跡バンドルの例
+
+failure-20260214-160000-ccc333.zip           # 25MB
+├── metadata.json
+├── execution.log
+├── trace.zip
+├── screenshots/
+│   ├── error-001.png
+│   └── error-002.png
+├── network/
+│   └── trace.har
+├── input/
+│   ├── hash.txt
+│   └── sample.json
+└── dump/
+    └── error-page.html
+
+（output/とvideos/は除外。必要なら別途提供）
+
+---
+
+## 注意事項
+
+1. **シンボリックリンク**:
+   - Windowsでは管理者権限が必要な場合あり
+   - 代替: `latest.txt` に最新runIdを記録
+
+2. **サイズ制限**:
+   - 1つのrunIdが100MBを超えたら警告
+   - videos/は500MB上限（デバッグ時のみ）
+
+3. **保持期間**:
+   - 成功: 7日
+   - 失敗: 30日
+   - デバッグ: 90日
+   - latest/last-successは無期限
+
+4. **アクセス権限**:
+   - artifacts/は管理者のみ
+   - 共有時はzipにパスワード設定
