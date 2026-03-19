@@ -543,14 +543,14 @@ step_141-147で確認されたサブフォルダ構造:
 |---|---------|------|--------|
 | Q1 | AHJ/TSEコードの意味（会社略称） | ❓ 未判明 | 高 |
 | Q2 | コードなしフォルダ（202512等）の扱い | ❓ 仮説のみ | 高 |
-| Q3 | ✖マーク付きPDFのRPA処理 | 🟡 スキップ推定 | 高（誤保存防止） |
+| Q3 | ✖マーク付きPDFのRPA処理 | ✅ ファイル名中の`✖`/`×`のみ検出・スキップ+ログ。PDF本文中マーク検出は不要（藤田さん確認済み 2026-03-19） | 解決済み |
 | Q4 | ＜現場経費＞の保存先フォルダ | ❓ 未判明 | 高 |
-| **Q5** | **リネームテンプレートの確定** | **🔴 3資料で不一致** | **最高（実装ブロッカー）** |
+| **Q5** | **リネームテンプレートの確定** | **✅ scope_freeze.md で凍結済み: `{vendor}_{issue_date}_{amount_comma}_{project}.pdf`。config・コードデフォルト更新済み (2026-03-19)** | **解決済み** |
 | Q6 | ＜一般経費＞の保存先フォルダ | 🟡 「その他」推定 | 中 |
 | Q7 | 鑑+明細の処理方針（PDF結合 or 別ファイル） | 🟡 iLovePDF使用確認 | 中 |
 | Q8 | 【支払なし】の保存先 | 🟡 「その他」推定 | 中 |
 | Q9 | 月次アーカイブ（TIC202507等への移動） | ✅ 手動操作確認 | 低 |
-| **Q10** | **保存先フォルダ名（請求書【現場】vs【受領】）** | **🔴 動画と不一致** | **最高（実装ブロッカー）** |
+| **Q10** | **保存先フォルダ名（請求書【現場】vs【受領】）** | **✅ `請求書【現場】` で確定（藤田さん現地確認済み 2026-03-19）** | **解決済み** |
 | Q11 | 処理後メールの「RK用」フォルダ移動をRPAに含めるか | ❓ 未確認 | 中 |
 
 ---
@@ -558,9 +558,10 @@ step_141-147で確認されたサブフォルダ構造:
 ### 最優先アクション（追記）
 
 **藤田さん確認前にブロックされる実装**:
-1. `Q5` + `Q10`: リネームテンプレートと保存先パスが確定しないと本番config更新不可
-2. `Q3`: ✖マーク除外フィルタの実装要否
-3. `Q7`: iLovePDF代替（pypdf結合）の実装判断
+1. ~~`Q5` + `Q10`: リネームテンプレートと保存先パスが確定しないと本番config更新不可~~ → 解決済み (2026-03-19)
+2. ~~`Q3`: ✖マーク除外フィルタ（ファイル名のみ vs PDF本文中も）の確認~~ → 解決済み (2026-03-19 藤田さん確認: ファイル名のみでOK)
+3. `Q7`: iLovePDF代替（pypdf結合）の実装判断（MVP対象外として確定済み、将来課題）
+4. ~~`Q10`: 実フォルダ名の現地確認~~ → 解決済み (2026-03-19 藤田さん確認)
 
 ---
 
@@ -670,3 +671,87 @@ step_141-147で確認されたサブフォルダ構造:
 **パターン2**: PDF-XChangerで印刷→PDF変換保存
 - ZIPや他形式を開いて「Microsoft Print to PDF」で再PDF化して保存
 - または: 鑑+明細の2ファイルをiLovePDFで結合後に保存
+
+---
+
+## 2026-03-19 [CODE] Option C routing: review files → {project_subdir}/要確認/
+
+### 決定内容
+review guard 発動時のファイル保存先を Option C（信頼度分岐ハイブリッド）に変更。
+
+**変更箇所**: `outlook_save_pdf_and_batch_print.py` L3656-3657（旧）→ L3656-3661（新）
+
+```python
+# Before（フラット）
+dest_dir = save_dir / "要確認" / "review_required"
+
+# After（Option C）
+if route_subdir:
+    dest_dir = save_dir / route_subdir / "要確認"  # プロジェクト担当者が自フォルダで確認
+else:
+    dest_dir = save_dir / "要確認" / "review_required"  # キーワード未マッチ → 中央
+```
+
+**根拠（Codex × 2 一致）**:
+- A（フラット）: レビュー担当者とファイル場所が不一致 → 見落とし構造的に発生
+- B（route-then-review）: 誤マッチ時に静かな取りこぼしリスク
+- C（採用）: routing と review を別軸にし、一意マッチ時のみプロジェクトsubdir/要確認/ に配置
+
+**テスト結果（run_20260319_141643）**:
+- TC-301 モビテック routing: ✅ PASS（→ 3329_ﾓﾋﾞﾃｯｸ・ｼﾝ・ﾃｸﾆｶﾙｾﾝﾀｰ/要確認/）
+- TC-601 要確認_ 振り分け継続: ✅ PASS
+- TC-302 中村 routing: ✅ PASS（回帰なし）
+- TC-303 その他 fallback: ✅ PASS（回帰なし）
+
+**備考**: fallback_subdir="その他" が常に route_subdir を返すため、現時点では中央 review_required は実質未使用。要確認なし運用の場合のみ発動。
+
+---
+
+## 2026-03-19 [CODE] 4フェーズリファクタリング完了
+
+**対象ファイル**: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py`
+
+**結果**: ~4,711行、125関数
+
+### Phase 1: 不要コード除去（低リスク）
+- 削除: `_resolve_route_subdir`（L657: 未参照）
+- 削除: `_determine_route_subdir`（L731: 未参照）
+- 削除: `ToolConfig.decrypt_password_window_minutes`（L390 + L2751: 未使用フィールド）
+
+### Phase 2: ヘルパー抽出（中リスク）
+- 追加: `_route_and_move_file(primary_path, dest_dir, final_name, log_path, unresolved)` — 重複3箇所の move/error/log ロジック統合
+- 追加: `process_pdf(pdf_path, att_name)` — main mail loop 内ローカルヘルパー（3重複 `_process_saved_pdf_file` 呼び出しを統合）
+- 追加: `add_url_task(urls_list)` — main mail loop 内ローカルヘルパー（2重複 `UrlOnlyTask` 生成を統合）
+
+### Phase 3: 関数分割（中リスク）
+- 追加: `_extract_vendor_from_text(text, company_deny_regex)` — `_extract_invoice_fields` から分離
+- 追加: `_extract_issue_date_from_text(text)` — 同上
+- 追加: `_extract_amount_from_text(text)` — 同上
+- 追加: `_extract_invoice_no_from_text(text)` — 同上
+- 追加: `_check_duplicate_attachment(...)` — `_process_saved_pdf_file` から分離
+- 追加: `_decrypt_pdf_if_needed(...)` — `_process_saved_pdf_file` から分離
+
+### Phase 4: main/config 分割（高リスク）
+- 追加: `_resolve_and_load_project_master(config_path, project_master_override)` — `_load_config` side effect 分離
+- 追加: `_apply_fallback_subdir_timestamp(routing)` — `_load_config` side effect 分離
+- 追加: `_run_debug_extract_mode(args, project_master_override, ap)` — `main` debug分岐（~47行）→ 1行呼び出し
+- 追加: `_finalize_and_notify(...)` — `main` 末尾（~65行）→ 1行呼び出し
+
+### 回帰テスト結果（2026-03-19）
+- `python -c "import outlook_save_pdf_and_batch_print"` → OK
+- `--scan-only` → candidates=16（Outlook疎通・メール走査正常）
+- `--execute` → exit code 0（idempotency正常動作、エラーなし）
+
+## 2026-03-19 [CODE] 追加リファクタリング（Codex High 3項目）
+
+**ファイル**: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py`
+**行数**: 4,761行（変更前: 4,711行。ヘルパー追加 +50、重複削除 -）
+
+### 変更内容
+- 追加: `_build_invoice_fields_from_pattern(vendor, date_str, amount_str, project, deny_re)` — `_extract_invoice_fields_from_filename` 内の Pattern A/dash/dot/legacy で繰り返されていた「deny check → amount parse → ExtractedPdfFields(...)」4ブロックを統合
+- 追加: `_parse_keywords(raw)` — `_load_config` 内の routing.rules（list形式）・routing.rules（dict形式）・sender_rules のキーワード解析ロジックを統合
+- 追加: `_try_extract_text_method(extractor, *, company_deny_regex, pdf_path, log_path, warn_prefix)` — `_extract_invoice_fields_from_pdf` 内の pypdf/pymupdf/tesseract/easyocr/yomitoku 各ステップの `try: text=extractor(); fields=...; if fields: return; except: log WARN` を統合
+
+### 回帰テスト（2026-03-19 17:09）
+- `--scan-only` test config → candidates=16, 25 DRY entries, `scan_only done` ✅（Phase 4テストと完全一致）
+- 構文チェック `ast.parse()` → syntax OK ✅

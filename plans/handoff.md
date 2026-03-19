@@ -237,6 +237,51 @@ Windows環境でChromaDB無効のためFTS5テキスト検索のみだが、work
 - Config PROD: `C:\ProgramData\RK10\Robots\56 資金繰り表エクセル入力\config\RK10_config_PROD.xlsx`
 - SCENARIO_INFO: `C:\ProgramData\RK10\Robots\56 資金繰り表エクセル入力\SCENARIO_INFO.md`
 
+### シナリオ57（基幹システムより仕訳はきだし）
+**Status**: ✅ **Fix 5 Rev2 E2E テスト通過（2026-02-23 17:15）** — Codex指摘5項目対応済み・全ステップ done。PROD実行のみ残。
+
+**フルパイプライン結果（2026-02-23 15:53）**（Fix5 Rev1で確認済み）:
+
+| ステップ | 結果 |
+|---------|------|
+| login (会社CD/ID/PW/submit) | ✅ 全done |
+| menu_monthly_tab / menu_nyukin_shiwake_button | ✅ done |
+| input_period_yyyymm (202601→2026/01変換) | ✅ done |
+| execute_generation | ✅ done |
+| re_exec_generation (Edge「保存」pyautogui + Downloads確認) | ✅ done |
+| save_to_target_path (Downloads→RK10_MOCK) | ✅ done |
+| **ターゲットファイル** | **仕訳_入金 (6).txt 生成確認** |
+
+**今セッション完了した修正（2026-02-23）**:
+
+1. **Fix1: 処理年月フォーマット変換** — `202601` → `2026/01`（フォームが YYYY/MM を要求）
+2. **Fix2: aReExec 削除 + Edge ダウンロード「保存」** — `invoke()` では .crdownload 止まり → `pyautogui.click()` で完了
+3. **Fix3: save ループ順序変更** — `_find_recent_txt_download` を最優先（save_dialog 誤検知より先に実行）
+4. **Fix4: save_dialog_patterns 誤検知修正** — 第2パターン削除（Edge窓に誤マッチしていた）
+5. **Fix5 Rev1: re_exec_generation 複数「保存」ボタン対応** — クリック後5秒以内にDownloadsに新規TXTが出現したボタンを採用（15:53テスト通過）
+6. **Fix5 Rev2: Codex指摘 5項目対応** — mtime検出・クリック前スナップ更新・二重クリック防止・デッドライン厳守・invoke()保護（syntax OK、E2Eは環境ブロック）
+
+**Fix5 Rev2の主な改善（Codex指摘対応）**:
+- `_snap_dl()` でクリック直前に `{Path: mtime}` スナップショット更新（誤帰属防止）
+- `_dp not in _pre_snap or _cur_mtime > _pre_snap[_dp]` でmtime検出（同名上書き対応）
+- `_clicked_rects: set` で二重クリック防止（outer loop再試行時）
+- `_btn_deadline = min(time.time() + 5.0, _dl_save_deadline)` でデッドライン厳守
+
+**残タスク（PROD 移行前）**:
+
+| タスク | 詳細 | 優先度 |
+|--------|------|--------|
+| **PROD 実行テスト** | `env=prod` で客先現地にて実行確認 | 高（客先現地） |
+| **login_required 確認** | PROD設定 `login_required: false` が本番でも正しいか | 中 |
+
+**Key Files**:
+- Tools: `C:\ProgramData\RK10\Robots\【57基幹システムより仕訳はきだし】\tools\`
+- Config: `C:\ProgramData\RK10\Robots\【57基幹システムより仕訳はきだし】\config\`
+- Latest report: `C:\ProgramData\RK10\Robots\【57基幹システムより仕訳はきだし】\work\ui_run_20260223_155326_test.json`
+- Decisions: `plans/decisions/projects/scenario-57-kikan-shiwake.md`
+
+---
+
 ### シナリオ51&52（ソフトバンク部門集計→楽楽精算申請）
 **Status**: ✅ ポカヨケ実装完了・テスト合格 — Codex指摘4項目の修正完了、検証クリア（2026-02-14）
 
@@ -276,215 +321,150 @@ Windows環境でChromaDB無効のためFTS5テキスト検索のみだが、work
 - Result: `data\result\scenario51_result_2026-01.json` (total_amount: 259,028円)
 
 ### シナリオ12・13（受信メールのPDFを保存・一括印刷）
-**Status**: ⚠️ OCR改善適用済み・未検証 — pdf-ocr Skill統合完了（2026-02-18）
+**Status**: ⚠️ リファクタリング完了（4フェーズ）・PROD preflight未実施
 
-**今セッション完了（2026-02-18）**:
-
-1. **G8/C2/G2/G9/G5/G3 完了**（前セッションから継続）
-2. **pdf-ocr Skill統合（external-repos/my-claude-skills/pdf-ocr/templates/ 使用）**:
-   - Phase1: DPI最適化（Tesseract 200/250/300、YomiToku 200/300、EasyOCR 200/300）
-   - Phase2: EasyOCRをカスケードstep 3.5に追加（既存関数を接続）
-   - Phase3: VENDOR_OCR_CORRECTIONS辞書追加（"緑エキスパート"→"縁エキスパート"）
-   - **Phase4**: `_preprocess_png_for_ocr()` 追加 — pdf_preprocess.pyのdeskew（Hough変換）+影除去をTesseract/EasyOCRに適用
-3. **SKILL.mdゲート追加**: pdf-ocr SKILL.md先頭に実装ファイル確認を必須化
-4. **MEMORY.md記録**: "Skill application = use the implementation code, not just the docs"
+**今セッション完了（2026-03-19）**:
+1. **Option C routing実装** — review guard発動時: `route_subdir/要確認/`（キーワード一致）or `要確認/review_required/`（未マッチ）
+2. **4フェーズリファクタリング**（outlook_save_pdf_and_batch_print.py: ~4,711行 → 125関数）
+   - Phase 1: 不要コード除去（`_resolve_route_subdir`, `_determine_route_subdir`, `decrypt_password_window_minutes`）
+   - Phase 2: ヘルパー抽出（`_route_and_move_file`, `process_pdf()`, `add_url_task()`）
+   - Phase 3: 抽出関数分割（`_extract_vendor_from_text` 他3関数 + `_check_duplicate_attachment`, `_decrypt_pdf_if_needed`）
+   - Phase 4: main/config分割（`_resolve_and_load_project_master`, `_apply_fallback_subdir_timestamp`, `_run_debug_extract_mode`, `_finalize_and_notify`）
+3. **追加リファクタリング（Codex High 3項目）**（outlook_save_pdf_and_batch_print.py: 4,761行）
+   - `_build_invoice_fields_from_pattern()` — `_extract_invoice_fields_from_filename` 内 Pattern A/dash/dot/legacy の4重複ブロック統合
+   - `_parse_keywords()` — `_load_config` 内 routing.rules/sender_rules のキーワード解析3箇所統合
+   - `_try_extract_text_method()` — `_extract_invoice_fields_from_pdf` 内 pypdf/pymupdf/tesseract/easyocr/yomitoku の5重複 try/except 統合
+4. **回帰テスト確認** — import OK / scan-only candidates=16, 25 DRYエントリ / execute exit code 0（冪等性正常動作）
 
 **ゲート状態**:
 | # | ゲート | 状態 |
 |---|--------|------|
-| G1 | routing実装（LCS+3gram） | ❌ 未実装 |
-| G2 | filename-first抽出実装 | ✅ 完了 |
-| G3 | --execute パイロット | ✅ 完了（OCR改善前） |
+| G1 | routing実装 | ✅ 実装済み（キーワード+sender rules+Option C） |
+| G2 | filename-first抽出 | ✅ 完了 |
+| G3 | --execute パイロット | ✅ 完了 |
 | G4 | Flag運用の藤田さん合意 | ❌ 未合意 |
 | G5 | report.jsonのURLマスキング | ✅ 完了 |
 | G6 | Runbook V1-V8検証 | ❌ 未検証 |
-| G7 | 冪等性テスト | ❌ 未実施 |
+| G7 | 冪等性テスト | ❌ 未実施（コードは実装済み） |
 | G8 | 全163件ファイル名規約適合率 | ✅ 完了（66.4%） |
 | G9 | FlagStatus安全フォールバック | ✅ 完了 |
 | G10 | 本番config preflight | ❌ 未実施 |
 
-**Next（次セッション最優先）**:
-- OCR改善後テスト未実施 → `--execute` on 202512フォルダで精度確認
-- G1 routing実装（LCS+3gram）
-- 藤田さんFlagStatus運用合意（G4）
-
-**今セッション完了（2026-02-14 15:45-17:30）**:
-
-1. **バッチファイル作成完了**（シナリオ44と同じパターン）:
-   - `scenario/1_テスト実行.bat` — tool_config_test.json使用、既定ドライラン
-   - `scenario/2_本番実行.bat` — tool_config_prod.json使用、本番実行
-   - `scenario/_test_batch.bat` — 環境セットアップ検証用
-   - `scenario/README.md` — 使い方ガイド、設定説明、トラブルシューティング
-
-2. **Outlook COM接続確認済み**:
-   - `--list-outlook-stores` 成功（`seikyu.tic@tokai-ic.co.jp`アクセス可能）
-   - スクリプト構文チェック合格
-   - BOM付きJSON読み込み対応確認（`utf-8-sig`使用）
-
-3. **重要な発見: 設計の相違**
-
-| 項目 | 現在の実装 | ヒアリング内容（2/13 藤田さん） |
-|------|----------|-------------------------------|
-| フォルダ作成 | **自動作成**（PDF内vendor名で） | **既存フォルダに振り分け**（工事名で） |
-| マッチング | vendor名完全抽出 | **3文字一致ルール** |
-| 不明時 | エラー停止 | 「その他」フォルダに保存 |
-
-**現在の実装**:
-- PDFから vendor（業者名）を自動抽出
-- フォルダ構造: `save_dir/{vendor_short}/{vendor_short}__{issue_date}__{amount}.pdf`
-- 例: `経理\請求書【現場】\モビテック\モビテック__20250213__123456円.pdf`
-
-**ヒアリング内容**:
-- 既存フォルダ名（工事名など）と3文字一致でマッチング
-- PDF内容と既存フォルダ名を比較して振り分け
-- 判断できないものは「その他」フォルダに保存
-
-**Next Steps（優先度順）**:
-
-1. **藤田さんからの動画待ち** — Power Automate Desktop録画で実際の操作フローを確認
-2. **実装方針決定**:
-   - **案A（拡張）**: 既存vendor抽出 + 3文字一致ロジック追加
-   - **案B（新規）**: 動画ベースで工事名マッチング新規実装
-3. **設定ファイル拡張**（案A選択時）:
-   - `existing_folders_root`: 既存フォルダのルートパス
-   - `match_threshold`: 一致文字数閾値（デフォルト3）
-   - `unknown_folder`: 不明時の退避先（デフォルト「その他」）
-
-**Blocker / Risk**:
-- **設計相違**: 現在の実装は「業者名ベース」、要件は「工事名ベース」
-- **3文字一致の曖昧性**: 複数フォルダが一致する可能性 → 一致文字数が多い方を優先、同数なら「その他」
-- URLのみ（Web請求サービス）メールは未自動化のため、検知したら停止して通知する（`fail_on_url_only_mail=true`）
+**本番デプロイ前に必要**:
+- G4: 藤田さんにFlag運用（FlagStatus=2で処理済みマーク）合意を取る
+- G6: Runbook V1-V8を藤田さんと実施確認
+- G10: `python outlook_save_pdf_and_batch_print.py --config config/tool_config_prod.json --scan-only` でネットワーク疎通確認
 
 **Key Files**:
-- ドキュメント: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\docs\s12_13_outlook_pdf_save_and_batch_print.md`
-- README: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\scenario\README.md`
-- バッチ（テスト）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\scenario\1_テスト実行.bat`
-- バッチ（本番）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\scenario\2_本番実行.bat`
-- 検証バッチ: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\scenario\_test_batch.bat`
-- メインツール: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py`
-- Config（テスト）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config_test.json`
 - Config（本番）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config_prod.json`
-- Artifacts: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\artifacts\run_YYYYMMDD_HHMMSS\`
+- メインツール: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py`
+- 決定ログ: `plans/decisions/projects/scenario-12-13-outlook-pdf.md`
+
+### シナリオ43（ETC明細作成）
+**Status**: ✅ 本番版v46完成 — 大規模改修実施済み（2026-02-23〜03-08）
+
+**別セッション進捗**:
+- **本番版 v46**（`scenario/` 直下）が最新。fix243シリーズでv1→v23 + 本番v1→v46の計69イテレーション
+- **修正内容**: ExternalResources修正、SaveAs一意名、ウィンドウ待機、フォーム入力ロバスト化、シート名フォールバック、日付修正、Invoice必須チェック
+- **PROD config更新済み**（2026-03-08、バックアップあり）
+- **pdf_annotateツール群**: PDF後処理（金額抽出、アノテーション、マージv5→v10、リオーダー、部門シート生成）
+- **env.txt = LOCAL**（本番テスト前）
+- **known_issues.md**: 4件のISSUEと修正コマンドを文書化（rpa-automationリポジトリ）
+
+**Key Files**:
+- 本番版: `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\scenario\本番インストール版　…_v46.rks`
+- pdf_annotate: `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\tools\pdf_annotate\`
+- known_issues: `C:\ProgramData\Generative AI\Github\rpa-automation\rk10\docs\known_issues.md`
+
+### シナリオ58（基幹システム査定支払い分はきだし）
+**Status**: 🆕 業務形式知作成済み・PROD config作成済み — 自動化実装前
+
+**別セッション進捗**:
+- **video2pdd v3で業務形式知を自動生成**（31ステップ、5フェーズ、未解決0件）
+- シナリオ57と同じ軽技Webだが**対象会社が異なる**（東海インプル建設 / tinton）
+- tool_config_prod.json 作成済み（2026-03-04）
+- **env.txt = LOCAL**
+
+**Key Files**:
+- 業務形式知: `C:\ProgramData\RK10\Robots\【58…】\docs\58_業務形式知.md`
+- Config PROD: `C:\ProgramData\RK10\Robots\【58…】\config\tool_config_prod.json`
+
+### シナリオ63（毎月同額支払い申請）
+**Status**: 🆕 業務形式知 + PDD + 自動化コード生成済み — セレクタ未検証
+
+**別セッション進捗**:
+- **video2pdd v3でPDD Excel + Pythonコード生成済み**
+- 4件/月の定期支払いコピー処理（前月→当月、日付・金額調整）
+- セレクタは全て**未検証**（Phase Aのログインのみ確定、Phase B/Cは推定）
+- **env.txt = LOCAL**
+
+**Key Files**:
+- 業務形式知: `C:\ProgramData\RK10\Robots\【63…】\docs\scenario63_業務形式知.md`
+- PDD: `C:\ProgramData\RK10\Robots\【63…】\docs\PDD_20260211_143654_072689.xlsx`
+- 自動化コード: `C:\ProgramData\RK10\Robots\【63…】\tools\automation_20260211_143654_072689.py`
+
+### シナリオ70（支払い確定処理）
+**Status**: 🆕 ヒアリング完了 — 自動化未着手
+
+**別セッション進捗（2026-02-25）**:
+- **吉田様ヒアリング完了**: 承認済みデータ→総合振込確定の処理フロー整理
+- **設計課題**: 都度振込の誤申請検知（申請者の「気づき」をRPAでどう担保するか）
+- video2pdd出力あり（`docs/video2pdd_s70/`）
+- **env.txt = LOCAL**
+
+**Key Files**:
+- ヒアリング記録: `C:\ProgramData\RK10\Robots\70楽楽精算支払い確定\docs\70_ヒアリング記録.md`
+- 業務形式知: `C:\ProgramData\RK10\Robots\70楽楽精算支払い確定\docs\70_業務形式知.md`
 
 ---
 
-## 今セッション (2026-02-17)
+### 吉田様ヒアリング設計メモ（2026-02-25、rpa-automationリポジトリ）
+**Status**: 要件整理完了 — 実装優先度確定
 
-### 1. rpa-workflows リポジトリ作成完了
-**Status**: ✅ 完了 — GitHub push済み
+6シナリオの要件を整理済み。提案優先度:
+1. **シナリオ50・58**: CSV吐き出し（低リスク、効果早い）
+2. **シナリオ60・63**: 定期申請の月次定型処理
+3. **シナリオ6**: 資金繰り表突合自動化（効果大、難易度中〜高）
+4. **シナリオ70**: 誤申請検知含む確定処理
+5. **シナリオ10関連**: 有料OCR API比較後に判断
 
-**プロジェクト概要**:
-- **リポジトリ**: `https://github.com/bubbleberry247/rpa-workflows` (private)
-- **目的**: RPA自動化プロジェクトの標準構成テンプレート
-- **構成**: RK10シナリオ + Playwright（4サービス） + Python ツール + CI/CD
+**Key File**: `C:\ProgramData\Generative AI\Github\rpa-automation\rk10\docs\2026-02-25_yoshida_hearing_scenario_design.md`
 
-**完了内容**:
-1. **ディレクトリ構造作成**:
-   - `rk10/scenarios/` — RK10シナリオ格納
-   - `playwright/rakuraku-seisan/`, `recoru/`, `drive-report/`, `softbank-portal/` — サービス別Playwrightテスト
-   - `python/` — Python自動化スクリプト
-   - `tests/` — テストスイート
-   - `.github/workflows/` — CI/CD定義
+### 共通ツール（rpa-automationリポジトリ）
 
-2. **設定ファイル作成**:
-   - `.gitignore` — Python/Node/RK10/credentials除外
-   - `README.md` — 技術スタック、セットアップ手順、開発ガイドライン
-   - `requirements.txt` — Python依存関係（playwright, openpyxl, xlwings, pywinauto, easyocr, PyMuPDF）
-   - `.env.example` — 環境変数テンプレート（4サービス認証情報、PROD/LOCAL切替）
-   - `playwright/package.json` — サービス別npm scripts
-   - `playwright/playwright.config.ts` — RPA最適化設定（headless:false、1920x1080、30s timeout、sequential実行）
+- **patch_rks.py**: .rks修正自動化（ExternalResources/SaveAs一意名/WaitWindow 3パッチ）
+- **rk10_skill_intake.py**: 教師データからevidence package自動生成（シナリオ37/43/44/55実行済み）
+- **POP3クリーンアップツール**: 顧客配布パッケージ完成（ZIP→バッチダブルクリック実行）
+- **RK10 Skill Map**: ワークフロー図・チェックリスト・リスクホットスポット整理
 
-3. **Git操作完了**:
-   - 初回コミット（18ファイル、521行）
-   - GitHub作成（`bubbleberry247/rpa-workflows`）
-   - push完了
+---
 
-**Key Files**:
-- Repository: `https://github.com/bubbleberry247/rpa-workflows`
-- Local: `C:\ProgramData\Generative AI\Github\rpa-automation\` (rpa-workflowsとしてpush)
+## 今セッション (2026-03-19)
 
-### 2. doboku-14w-training データ収集進捗更新
-**Status**: ⚠️ 残り5問 — Claude for Chrome実行待ち
+### 1. 全リポジトリ横断の状況確認・handoff更新
+- rpa-automation/doboku-14w/construction-permit-tracker/ralph-cc-loop/x-research-skills 確認
+- 別セッション進捗をhandoffに反映（シナリオ43/58/63/70/12&13、共通ツール、ヒアリング設計メモ）
 
-**完了内容**:
-1. **グループ6完了**（17問）:
-   - Word文書のチェックリスト更新
-   - グループ6ステータス: "一部不完全（17問）- 残り3個を収集" → "✅完了（17問）"
+### 2. 全シナリオ共通デプロイツール `rk10_preflight` 作成完了
+**配置先**: `C:\ProgramData\RK10\Tools\rk10_preflight\`
+- `rk10_preflight.py` — メインスクリプト（全9カテゴリチェック + --fix自動修復）
+- `scenarios.json` — 全15シナリオ定義
 
-2. **全体進捗分析**:
-   - 総問題数: **159問**
-   - 完了: **154問**（97%）
-   - 不完全: **5問**（3%）
-   - 不完全問題の内訳:
-     - **グループA（全フィールド収集）**: 3問
-       - R1gakkaA-050（R1 選択肢50）
-       - R1gakkaA-056（R1 選択肢56）
-       - R6gakkaB-025（R6 必須25）
-     - **グループB（一部補完）**: 2問
-       - R6gakkaA-031（R6 問題A 31）— explainLongのみ必要
-       - R6gakkaB-022（R6 問題B 22）— explainD完成 + explainShort/Long必要
+**使い方**:
+```bash
+python rk10_preflight.py all --fix    # 一括環境セットアップ（Day 1）
+python rk10_preflight.py 55 --env PROD  # 個別本番移行チェック
+python rk10_preflight.py 55 --json      # JSON出力（監査証跡）
+```
 
-3. **Claude for Chrome用プロンプト作成**:
-   - ファイル: `C:\Users\masam\Downloads\claude_chrome_prompt_残り5問.txt`
-   - 参照サイト: `https://kakomonn.com/doboku-1/`
-   - データ形式: パイプ区切り（`|`）
-   - 挿入位置指定: グループA（新規行追加）、グループB（既存行編集）
+**チェック項目**: Python環境、パッケージ、設定ファイル、設定値、資格情報、ネットワーク、COM、ツールファイル、ディレクトリ
+**自動修復**: pip install、cmdkey資格情報登録（対話的）、setx環境変数、mkdir
 
-**Next Steps**:
-1. **Claude for Chrome実行**:
-   - プロンプトファイルを読み込み
-   - kakomonn.com から5問の説明文を収集
-   - Word文書に反映
+**テスト結果（LOCAL環境）**:
+| シナリオ | NG | 内容 |
+|---------|---|----|
+| 55 | 1 | UNCパス（社内未接続） |
+| 57 | 4 | UNC + BOM付きJSON + 環境変数未設定 + logディレクトリ未作成 |
+| 38/42/47/63/70/71 | 0 | 全チェック通過 |
 
-2. **完了確認**:
-   - 全159問が完全になったことを確認
-   - パイプ区切り形式が正しいことを確認
-   - Ctrl+S で保存
-
-**Key Files**:
-- Word文書: `C:\Users\masam\Downloads\無題のドキュメント (1).docx`
-- プロンプト: `C:\Users\masam\Downloads\claude_chrome_prompt_残り5問.txt`
-- QuestionBank CSV: `C:\ProgramData\Generative AI\Github\doboku-14w-training\tools\questionbank_complete.csv`
-
-### 3. シナリオ12&13 教師データPSTインポート＆Dry-Run
-**Status**: ✅ PSTインポート完了・Dry-Run成功（2026-02-17）
-
-**完了内容（2026-02-17）**:
-
-1. **PSTインポート完了**:
-   - ファイル: `backup.pst`（1.7GB）、パスワード: `1`
-   - インポート先: `seikyu.tic@tokai-ic.co.jp\受信トレイ`（サブフォルダではなく直接）
-   - 107通インポート成功
-   - **注意**: 受信トレイはサーバーサイドフォルダ（ドラッグ＆ドロップではpermissionエラーが出るが、インポートウィザード経由では書込可能）
-
-2. **Config更新**:
-   - `tool_config_test.json` の `folder_path` を `\\seikyu.tic@tokai-ic.co.jp\受信トレイ` に変更
-   - `[テスト]教師データ` サブフォルダは削除済み（permission問題のため受信トレイ直下に統一）
-   - `unread_only: false`, `use_flag_status: true` — FlagStatusで処理済み/未処理を管理
-
-3. **Dry-Run テスト成功**:
-   - 179通読み込み → 151通（FlagStatusフィルタ後）→ 125通候補（件名フィルタ後）→ 163件添付ファイル検出（PDF+ZIP）
-   - エラー: 0件
-   - 結果: success
-   - ログ: `artifacts/run_20260217_233052/run.log`
-
-**Next Steps（優先度順）**:
-
-1. **`--execute` テスト実行** — 実際にPDF保存＋リネーム処理を確認（ユーザー承認後）
-2. **設計相違の解決** — 現在のvendor名ベースのフォルダ作成 vs 藤田さん要件の3文字マッチング（工事名フォルダ振り分け）
-3. **藤田さんからの動画待ち** — Power Automate Desktop録画で実際の操作フローを確認
-
-**設計相違（未解決）**:
-
-| 項目 | 現在の実装 | ヒアリング内容（2/13 藤田さん） |
-|------|----------|-------------------------------|
-| フォルダ作成 | **自動作成**（PDF内vendor名で） | **既存フォルダに振り分け**（工事名で） |
-| マッチング | vendor名完全抽出 | **3文字一致ルール** |
-| 不明時 | エラー停止 | 「その他」フォルダに保存 |
-
-**Key Files**:
-- メインツール: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py`
-- Config（テスト）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config_test.json`
-- Config（本番）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config.json`
-- バッチ（テスト）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\scenario\1_テスト実行.bat`
-- Artifacts: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\artifacts\`
+**BOM付きJSON問題**: シナリオ57の`tool_config_prod.json`がBOM付きUTF-8。`--fix`で対応予定（utf-8-sig対応）

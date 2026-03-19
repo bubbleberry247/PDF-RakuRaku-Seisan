@@ -1,9 +1,28 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "effortLevel": "high",
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
+  "permissions": {
+    "allow": [
+      "Read(//c//**)",
+      "Bash(cmdkey /list:*)",
+      "Bash(uv run python:*)",
+      "Bash(wmic process:*)",
+      "Bash(\"C:\\\\ProgramData\\\\RK10\\\\Robots\\\\【57基幹システムより仕訳はきだし】\\\\work\\\\diag_combo.py\":*)",
+      "Bash(Get-Content:*)",
+      "Bash(# 11:00以降のファイルを確認 find \"\"C:/Users/masam/Downloads/\"\" -newer \"\"C:/Users/masam/Downloads/rks43_fixv2_20260223083150\"\" -type f)",
+      "Read(//c/ProgramData/Generative AI/Github/PDF-RakuRaku-Seisan/**)",
+      "Bash(\"c:/ProgramData/Generative AI/Github/PDF-RakuRaku-Seisan/plans/decisions/projects/scenario-57-kikan-shiwake.md\":*)"
+    ],
+    "additionalDirectories": [
+      "C:\\ProgramData\\RK10\\Robots\\【57基幹システムより仕訳はきだし】\\tools",
+      "C:\\ProgramData\\RK10\\Robots\\【57基幹システムより仕訳はきだし】\\config",
+      "C:\\ProgramData\\RK10\\Robots\\【57基幹システムより仕訳はきだし】\\work",
+      "C:\\RK10_MOCK\\TIC-mainSV\\D\\SS\\建設業務システムファイルデータ\\東海インプル建設株式会社\\小林システム部門データ"
+    ]
+  },
+  "effortLevel": "high",
   "allowedTools": [
     "Read",
     "Edit",
