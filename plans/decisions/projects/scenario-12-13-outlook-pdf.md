@@ -755,3 +755,44 @@ else:
 ### 回帰テスト（2026-03-19 17:09）
 - `--scan-only` test config → candidates=16, 25 DRY entries, `scan_only done` ✅（Phase 4テストと完全一致）
 - 構文チェック `ast.parse()` → syntax OK ✅
+
+---
+
+## 2026-03-19 [REPO] シナリオ12・13の正本を repo 側へ同期
+
+### 決定内容
+- `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan` をシナリオ12・13コードの正本管理先として継続使用する
+- 正本の範囲を `outlook_save_pdf_and_batch_print.py` 単体から、OCR補助群・benchmark群・`review_helper`・関連configまで拡張した
+- OCR の既定 provider は `openai` (`GPT-4o only`) を採用し、source / deploy の両方で既定値を揃えた
+
+### repo に同期した主なファイル
+- `tools/outlook_save_pdf_and_batch_print.py`
+- `tools/vision_ocr.py`
+- `tools/training_data.py`
+- `tools/vendor_matching.py`
+- `tools/build_vendor_hints.py`
+- `tools/build_bench_eval_assets.py`
+- `tools/run_full_vision_bench.py`
+- `tools/build_ocr_overlay_report.py`
+- `tools/score_ocr_bench.py`
+- `tools/web_invoice_downloader.py`
+- `tools/review_helper/`
+- `config/tool_config_prod.json`
+- `config/tool_config_test.json`
+- `config/golden_dataset_v4.json`
+- `config/golden_dataset_v4_eval.json`
+- `config/vendor_hints.json`
+- `config/vendor_delivery_master_v4.xlsx`
+- `config/project_master_v20260319.xlsx`
+
+### 根拠
+- 配布先の現行コードは Git 管理外だったため、変更履歴と rollback point を確保するには既存 source repo への同期が必要
+- `invoice-ocr-guardrails` 側も同日に `GPT-4o only` 前提へ更新済みで、skill と本体コードの前提を一致させる必要があった
+
+### 検証
+- `python -m py_compile` で同期対象の Python ファイル群を構文確認
+- repo 側 `config/tool_config_prod.json` / `tool_config_test.json` の `routing.vision_ocr_provider` が `openai` であることを確認
+
+### 備考
+- `review_helper` 配下の `__pycache__` は `.gitignore` により Git 管理対象外
+- customer 固有設定を含む live config は repo 側にも同期した。外部共有が必要になった場合は別途 template 化を検討する

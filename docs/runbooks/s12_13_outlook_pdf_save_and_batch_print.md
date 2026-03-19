@@ -118,11 +118,27 @@
 
 - 正本（リポジトリ）: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\tools\outlook_save_pdf_and_batch_print.py`
 - 配布（ロボット配下）: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py`
+- 関連OCRツール（正本・リポジトリ）:
+  - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\tools\vision_ocr.py`
+  - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\tools\training_data.py`
+  - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\tools\vendor_matching.py`
+  - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\tools\review_helper\`
+- 関連config（正本・リポジトリ）:
+  - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\config\tool_config_prod.json`
+  - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\config\tool_config_test.json`
+  - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\config\golden_dataset_v4.json`
+  - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\config\golden_dataset_v4_eval.json`
 - 設定例（推奨）:
   - テスト: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config_test.json`
   - 本番: `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config_prod.json`
 - 実行例（ドライラン）:
   - `python C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py --config C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\config\tool_config_test.json --dry-run --dry-run-mail`
+
+### OCR運用方針（2026-03-19時点）
+
+- 既定 provider は `openai`（`GPT-4o only`）
+- `tool_config_prod.json` / `tool_config_test.json` の `routing.vision_ocr_provider` も `openai`
+- fresh 500件ベンチでは `GPT-4o only` が `Azure DI + GPT-4o` を僅差で上回ったため、現行の正本は `openai` ベースで維持する
 
 ### 設定（config）必須項目
 

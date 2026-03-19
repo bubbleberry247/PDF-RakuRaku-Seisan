@@ -1,0 +1,19 @@
+{
+  "number_column": "工事番号",
+  "name_column": "工事名称",
+  "busho_column": "部署コード",
+  "keyword_columns": [
+    "工事名称",
+    "現場名",
+    "検索用キーワード"
+  ],
+  "repair_values": [
+    "修繕",
+    "営繕",
+    "R"
+  ],
+  "new_values": [
+    "新築",
+    "N"
+  ]
+}

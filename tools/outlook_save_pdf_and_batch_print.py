@@ -34,8 +34,8 @@ import tempfile
 import time
 import traceback
 import zipfile
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from dataclasses import asdict, dataclass, field
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence, TypeVar
 from unicodedata import normalize
@@ -63,6 +63,15 @@ try:
     _PYWIN32_COM_AVAILABLE = True
 except Exception:
     _PYWIN32_COM_AVAILABLE = False
+
+try:
+    from web_invoice_downloader import (
+        WebDownloadConfig, VendorWebConfig, WebDownloadResult,
+        dispatch_web_download, cleanup_web_sessions,
+    )
+    _WEB_DOWNLOAD_AVAILABLE = True
+except Exception:
+    _WEB_DOWNLOAD_AVAILABLE = False
 
 
 T = TypeVar("T")
@@ -253,6 +262,27 @@ ZIP_MAX_MEMBERS = 80
 ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES = 250 * 1024 * 1024
 ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES = 80 * 1024 * 1024
 ZIP_PASSWORD_MAX_CANDIDATES = 20
+PROCESSED_MANIFEST_NAME = "processed_attachments_manifest.jsonl"
+PROJECT_NOISE_RE = re.compile(
+    r"(請求書|御請求書|納品書|見積書|契約書類|契約書|電子決済サービス|査定表|チェックリスト|回収チェックリスト|精算分|本体工事精算分|控え)"
+)
+PROJECT_POSITIVE_MARKERS: tuple[str, ...] = (
+    "工事",
+    "新築",
+    "改修",
+    "修繕",
+    "計画",
+    "様邸",
+    "共同住宅",
+    "アパート",
+    "マンション",
+    "店舗",
+    "ビル",
+    "センター",
+    "現場",
+    "町",
+    "丁目",
+)
 
 
 @dataclass(frozen=True)
@@ -282,7 +312,9 @@ class MergeConfig:
 class PrintConfig:
     enabled: bool = False
     printer_name: str | None = None
-    method: str = "shell"  # shell | (future) acrobat
+    # shell: send to printer, pdf_copy: copy PDFs to a folder as "print output"
+    method: str = "shell"
+    pdf_output_dir: str | None = None
 
 
 @dataclass(frozen=True)
@@ -299,12 +331,49 @@ class RenameConfig:
     # If true, create a sub-directory per vendor under save_dir.
     create_vendor_subdir: bool = True
     vendor_subdir_template: str = "{vendor_short}"
-    file_name_template: str = "{vendor_short}__{issue_date}__{amount}.pdf"
+    file_name_template: str = "{vendor}_{issue_date}_{amount_comma}_{project}.pdf"
     # Regex to exclude recipient company names from vendor extraction (optional).
     company_deny_regex: str | None = None
     max_pages: int = 2
     # If true, try to extract invoice fields from filename before PDF extraction.
     filename_first: bool = True
+
+
+@dataclass(frozen=True)
+class RoutingRule:
+    subdir: str
+    keywords: Sequence[str] = tuple()
+
+
+@dataclass(frozen=True)
+class ProjectMasterEntry:
+    kojiban:    str          # 工事番号（例: 2025-001。空欄可）
+    kojimei:    str          # 工事名称（検索キーワード）
+    busho:      str          # 部署（"新築" or "修繕"）
+    keywords:   tuple[str, ...] = ()  # 追加キーワード（カンマ区切りで読み込み）
+    start_date: str = ""
+    end_date:   str = ""     # 空=有効
+    status:     str = "active"
+
+
+@dataclass(frozen=True)
+class SenderRule:
+    sender: str
+    subdir: str
+    keywords: tuple = ()
+
+
+@dataclass(frozen=True)
+class RoutingConfig:
+    enabled: bool = False
+    fallback_subdir: str = ""
+    rules: Sequence[RoutingRule] = tuple()
+    sender_rules: Sequence[SenderRule] = tuple()
+    ban_senders: frozenset = frozenset()
+    threshold: int = 1
+    tie_margin: float | None = None
+    vision_ocr_enabled: bool = False
+    vision_ocr_provider: str = "openai"
 
 
 @dataclass(frozen=True)
@@ -316,8 +385,22 @@ class ToolConfig:
     print: PrintConfig = PrintConfig()
     mail: MailConfig = MailConfig()
     rename: RenameConfig = RenameConfig()
+    routing: RoutingConfig = RoutingConfig()
     fail_on_url_only_mail: bool = True
-    decrypt_password_window_minutes: int = 20
+    enable_zip_processing: bool = True
+    enable_pdf_decryption: bool = True
+    project_master: tuple = field(default_factory=tuple)
+    project_master_path: str | None = None
+    enable_web_download: bool = False
+    web_download: Any = None  # WebDownloadConfig | None
+
+
+@dataclass(frozen=True)
+class PartialInvoiceFields:
+    vendor: str | None = None
+    issue_date: str | None = None
+    amount: int | None = None
+    project: str | None = None
 
 
 @dataclass(frozen=True)
@@ -342,10 +425,14 @@ class SavedAttachment:
     issue_date: str | None
     amount: int | None
     invoice_no: str | None
+    project: str | None
     sha256: str
     was_encrypted: bool
     decrypted_path: str | None
     encrypted_original_path: str | None
+    route_subdir: str | None = None
+    route_reason: str | None = None
+    processing_status: str = "saved"
 
 
 def _mask_url(url: str) -> str:
@@ -367,6 +454,80 @@ class ExtractedPdfFields:
     issue_date: str  # YYYYMMDD
     amount: int
     invoice_no: str | None
+    project: str | None = None
+    raw_ocr_text: str = ""
+    source: str = ""
+    vendor_category: str | None = None
+    requires_manual: bool = False
+    review_reasons: tuple[str, ...] = ()
+
+
+def _partial_from_extracted_fields(
+    fields: ExtractedPdfFields,
+    fallback: PartialInvoiceFields,
+) -> PartialInvoiceFields:
+    return PartialInvoiceFields(
+        vendor=fields.vendor or fallback.vendor,
+        issue_date=fields.issue_date or fallback.issue_date,
+        amount=fields.amount if fields.amount is not None else fallback.amount,
+        project=fields.project or fallback.project,
+    )
+
+
+def _apply_invoice_guardrails(fields: ExtractedPdfFields) -> ExtractedPdfFields:
+    return _apply_invoice_guardrails_with_sender(fields, sender=None)
+
+
+def _apply_invoice_guardrails_with_sender(
+    fields: ExtractedPdfFields,
+    *,
+    sender: str | None,
+) -> ExtractedPdfFields:
+    resolved_vendor = fields.vendor
+    try:
+        from vendor_matching import canonicalize_vendor as _canonicalize_vendor
+
+        canonical_vendor = _canonicalize_vendor(
+            fields.vendor,
+            sender=sender,
+            context_text=fields.raw_ocr_text,
+            drop_non_vendor=False,
+        )
+        if canonical_vendor:
+            resolved_vendor = canonical_vendor
+    except Exception:
+        pass
+
+    if fields.source == "vision_ocr" and resolved_vendor == fields.vendor:
+        return fields
+
+    try:
+        from vision_ocr import evaluate_auto_pass as _evaluate_auto_pass
+
+        vendor_category, requires_manual, review_reasons = _evaluate_auto_pass(
+            vendor=resolved_vendor,
+            issue_date=fields.issue_date,
+            amount=fields.amount,
+            confidence="high",
+            context_text=fields.raw_ocr_text,
+        )
+    except Exception as e:
+        vendor_category = None
+        requires_manual = True
+        review_reasons = (f"guardrail_eval_failed:{type(e).__name__}",)
+
+    return ExtractedPdfFields(
+        vendor=resolved_vendor,
+        issue_date=fields.issue_date,
+        amount=fields.amount,
+        invoice_no=fields.invoice_no,
+        project=fields.project,
+        raw_ocr_text=fields.raw_ocr_text,
+        source=fields.source,
+        vendor_category=vendor_category,
+        requires_manual=requires_manual,
+        review_reasons=review_reasons,
+    )
 
 
 @dataclass(frozen=True)
@@ -391,6 +552,8 @@ class RunReport:
     url_only_tasks: Sequence[UrlOnlyTask]
     merged_pdf_path: str | None
     printed_paths: Sequence[str]
+    project_master_path: str | None
+    new_project_candidates_path: str | None
     unresolved: Sequence[str]
 
 
@@ -449,6 +612,297 @@ def _normalize_text(text: str) -> str:
     return text.replace("\u3000", " ")
 
 
+def _clean_project_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    s = _normalize_text(value)
+    s = re.sub(r"\s+", " ", s).strip(" _-")
+    return s or None
+
+
+def _looks_like_new_project_candidate(project: str | None) -> bool:
+    candidate = _clean_project_name(project)
+    if not candidate:
+        return False
+    normalized = _normalize_for_match(candidate)
+    if len(normalized) < 4:
+        return False
+    stripped = PROJECT_NOISE_RE.sub(" ", candidate)
+    stripped = re.sub(r"\s+", " ", stripped).strip(" _-")
+    stripped_norm = _normalize_for_match(stripped)
+    if len(stripped_norm) < 4:
+        return False
+    if any(marker in stripped for marker in PROJECT_POSITIVE_MARKERS):
+        return True
+    return len(stripped_norm) >= 8
+
+
+def _cleanup_rendered_filename(value: str) -> str:
+    root, ext = os.path.splitext(value)
+    root = re.sub(r"_+", "_", root).strip(" _.")
+    if not root:
+        root = "unnamed"
+    if not ext:
+        ext = ".pdf"
+    return root + ext
+
+
+def _normalize_for_match(value: str) -> str:
+    s = _normalize_text(value or "").lower()
+    # Keep letters/numbers/CJK only to make matching stable across separators.
+    return re.sub(r"[\W_]+", "", s, flags=re.UNICODE)
+
+
+
+
+def _resolve_route_by_sender(
+    *,
+    routing_cfg: RoutingConfig,
+    sender: str,
+    attachment_name: str,
+    subject: str,
+) -> str:
+    """L1 sender-based routing. Returns subdir or empty string."""
+    if not routing_cfg.enabled or not routing_cfg.sender_rules:
+        return ""
+    sender_lower = (sender or "").lower().strip()
+    if not sender_lower:
+        return ""
+    for rule in routing_cfg.sender_rules:
+        if rule.sender != sender_lower:
+            continue
+        subdir = _sanitize_filename(rule.subdir or "")
+        if not subdir:
+            continue
+        if not rule.keywords:
+            return subdir
+        combined = _normalize_for_match(f"{attachment_name} {subject}")
+        for kw in rule.keywords:
+            if _normalize_for_match(str(kw)) in combined:
+                return subdir
+        return ""
+    return ""
+
+
+def _determine_route_decision(
+    *,
+    cfg: "ToolConfig",
+    save_dir: Path | None,
+    sender: str,
+    attachment_name: str,
+    subject: str,
+    project: str | None,
+    full_text: str,
+) -> tuple[str, str]:
+    """Unified routing with audit reason: BAN -> L1 sender -> L2 count -> existing folder -> fallback."""
+    if not cfg.routing.enabled:
+        return "", "routing_disabled"
+    sender_lower = (sender or "").lower().strip()
+    if sender_lower in cfg.routing.ban_senders:
+        return cfg.routing.fallback_subdir, "ban_sender"
+    route = _resolve_route_by_sender(
+        routing_cfg=cfg.routing,
+        sender=sender,
+        attachment_name=attachment_name,
+        subject=subject,
+    )
+    if route:
+        return route, "sender_rule"
+    route = _resolve_route_by_project_name(
+        entries=cfg.project_master,
+        project=project,
+    )
+    if route:
+        return route, "project_master_project"
+    route = _resolve_route_by_count(
+        entries=cfg.project_master,
+        full_text=full_text,
+        threshold=cfg.routing.threshold,
+        tie_margin=cfg.routing.tie_margin,
+    )
+    if route:
+        return route, "project_master"
+    route = _resolve_route_by_existing_folders(
+        save_dir=save_dir,
+        project=project,
+        full_text=full_text,
+        fallback_subdir=cfg.routing.fallback_subdir,
+    )
+    if route:
+        return route, "existing_folder_match"
+    fallback = cfg.routing.fallback_subdir
+    if _looks_like_new_project_candidate(project):
+        return _new_project_candidate_subdir(fallback), "new_project_candidate"
+    if fallback:
+        return fallback, "fallback"
+    return "", "no_route"
+
+
+def _resolve_route_by_project_name(
+    *,
+    entries,
+    project: str | None,
+) -> str:
+    """Use extracted project text for a deterministic project_master hit before fuzzy count."""
+    project_name = _clean_project_name(project)
+    normalized_project = _normalize_for_match(project_name or "")
+    if len(normalized_project) < 6:
+        return ""
+
+    scored: list[tuple[int, int, object]] = []
+    for entry in entries:
+        entry_name = _clean_project_name(getattr(entry, "kojimei", ""))
+        entry_norm = _normalize_for_match(entry_name or "")
+        if len(entry_norm) < 6:
+            continue
+        if entry_norm not in normalized_project:
+            continue
+        scored.append((len(entry_norm), len(entry_name or ""), entry))
+
+    if not scored:
+        return ""
+
+    scored.sort(key=lambda item: (-item[0], -item[1], getattr(item[2], "kojiban", "")))
+    if len(scored) >= 2 and scored[0][0] == scored[1][0] and scored[0][1] == scored[1][1]:
+        return ""
+
+    best_entry = scored[0][2]
+    if best_entry.busho == "修繕":
+        return "営繕"
+    folder = f"{best_entry.kojiban}_{best_entry.kojimei}".strip("_")
+    return folder
+
+
+def _new_project_candidate_subdir(fallback_subdir: str) -> str:
+    fallback = _sanitize_filename(fallback_subdir or "")
+    m = re.search(r"(\d{8}_\d{4,6})$", fallback)
+    if m:
+        return f"新規案件候補_{m.group(1)}"
+    return "新規案件候補"
+
+
+def _resolve_route_by_count(
+    *,
+    entries,
+    full_text: str,
+    threshold: int = 1,
+    tie_margin: float | None = None,
+) -> str:
+    """
+    工事名称またはキーワードの出現回数が threshold 以上の ProjectMasterEntry を探して
+    振り分け先フォルダ名を返す。見つからない場合は空文字を返す。
+
+    tie_margin が指定されている場合、最高スコアと2位スコアの差が tie_margin 以下なら
+    判定不能として空文字を返す（fallback に振られる）。
+    """
+    if not entries or not full_text:
+        return ""
+    normalized = _normalize_for_match(full_text)
+
+    # 全エントリの最高ヒット数を集計
+    scored: list[tuple[int, object]] = []  # (max_count, entry)
+    for entry in entries:
+        all_kw = [entry.kojimei] + list(entry.keywords)
+        max_count = 0
+        for raw_kw in all_kw:
+            kw = _normalize_for_match(raw_kw)
+            if not kw:
+                continue
+            if len(kw) < 3:
+                continue
+            if kw.isdigit() and len(kw) < 4:
+                continue
+            count = normalized.count(kw)
+            if count > max_count:
+                max_count = count
+        if max_count >= threshold:
+            scored.append((max_count, entry))
+
+    if not scored:
+        return ""
+
+    # スコア降順ソート
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    # tie_margin チェック: 2位以上が存在し、差が margin 以下ならタイ判定
+    if tie_margin is not None and len(scored) >= 2:
+        top_score = scored[0][0]
+        second_score = scored[1][0]
+        if top_score > 0 and (top_score - second_score) / top_score <= tie_margin:
+            return ""  # タイ → fallback
+
+    best_entry = scored[0][1]
+    if best_entry.busho == "修繕":
+        return "営繕"
+    folder = f"{best_entry.kojiban}_{best_entry.kojimei}".strip("_")
+    return folder
+
+
+def _folder_match_tokens(folder_name: str) -> tuple[str, ...]:
+    cleaned = _clean_project_name(folder_name) or folder_name
+    cleaned = re.sub(r"^\d{3,5}_?", "", cleaned).strip()
+    raw_parts = re.split(r"[_\-\s()（）【】\[\]<>＜＞・/]+", cleaned)
+    tokens: list[str] = []
+    whole = _normalize_for_match(cleaned)
+    if len(whole) >= 4:
+        tokens.append(whole)
+    for part in raw_parts:
+        norm = _normalize_for_match(part)
+        if len(norm) >= 3 and norm not in tokens:
+            tokens.append(norm)
+    return tuple(tokens)
+
+
+def _resolve_route_by_existing_folders(
+    *,
+    save_dir: Path | None,
+    project: str | None,
+    full_text: str,
+    fallback_subdir: str = "",
+) -> str:
+    """Use already-created project folders before falling back to unknown."""
+    if save_dir is None or not save_dir.exists():
+        return ""
+
+    normalized_project = _normalize_for_match(project or "")
+    normalized_full = _normalize_for_match(full_text or "")
+    if not normalized_project and not normalized_full:
+        return ""
+
+    fallback_norm = _normalize_for_match(fallback_subdir or "")
+    scored: list[tuple[int, int, str]] = []
+    for child in save_dir.iterdir():
+        if not child.is_dir():
+            continue
+        folder_name = child.name.strip()
+        folder_norm = _normalize_for_match(folder_name)
+        if not folder_norm or folder_norm == fallback_norm:
+            continue
+        tokens = _folder_match_tokens(folder_name)
+        if not tokens:
+            continue
+
+        project_hits = [len(tok) for tok in tokens if normalized_project and tok in normalized_project]
+        full_hits = [len(tok) for tok in tokens if normalized_full and tok in normalized_full]
+        if not project_hits and not full_hits:
+            continue
+
+        score = 0
+        if project_hits:
+            score += 100 + max(project_hits)
+        if full_hits:
+            score += max(full_hits)
+        scored.append((score, len(folder_name), folder_name))
+
+    if not scored:
+        return ""
+
+    scored.sort(key=lambda item: (-item[0], -item[1], item[2]))
+    if len(scored) >= 2 and scored[0][0] == scored[1][0]:
+        return ""
+    return scored[0][2]
+
+
 def _is_ascii_path(path: Path) -> bool:
     try:
         str(path).encode("ascii")
@@ -486,6 +940,202 @@ def _parse_ymd(value: str) -> str | None:
     if not (1 <= mo <= 12 and 1 <= d <= 31):
         return None
     return f"{y:04}{mo:02}{d:02}"
+
+
+def _normalize_yyyymmdd_candidate(value: str) -> str | None:
+    s = re.sub(r"\D", "", _normalize_text(value or ""))
+
+    def _validate(y: int, mo: int, d: int) -> bool:
+        if not (2000 <= y <= 2100 and 1 <= mo <= 12 and 1 <= d <= 31):
+            return False
+        try:
+            datetime(y, mo, d)
+            return True
+        except ValueError:
+            return False
+
+    if len(s) == 8:
+        y, mo, d = int(s[0:4]), int(s[4:6]), int(s[6:8])
+        if _validate(y, mo, d):
+            return s
+        return None
+    if len(s) == 7:
+        # YYYYMDD: 月1桁(1-9) + 日2桁。例: "2026125" → 2026-01-25
+        y, mo, d = int(s[0:4]), int(s[4:5]), int(s[5:7])
+        if _validate(y, mo, d):
+            return f"{y:04d}{mo:02d}{d:02d}"
+        return None
+    if len(s) == 9:
+        candidates: list[tuple[int, int, str]] = []
+        today = datetime.now().date()
+        for i in range(9):
+            cand = s[:i] + s[i + 1 :]
+            parsed = _normalize_yyyymmdd_candidate(cand)
+            if parsed:
+                year = int(parsed[0:4])
+                month = int(parsed[4:6])
+                day = int(parsed[6:8])
+                cand_date = datetime(year, month, day).date()
+                recent_penalty = 0 if cand_date <= today else 1
+                candidates.append((recent_penalty, abs((today - cand_date).days), parsed))
+        if candidates:
+            candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+            return candidates[0][2]
+    return None
+
+
+def _parse_amount_token(value: str) -> int | None:
+    s = _normalize_text(value or "").strip()
+    s = s.replace("円", "").replace("¥", "").replace("￥", "")
+    s = s.replace(",", "").replace("，", "")
+    if not s.isdigit():
+        return None
+    amount = int(s)
+    if amount <= 0:
+        return None
+    return amount
+
+
+def _extract_partial_invoice_fields_from_filename(
+    filename: str, company_deny_regex: str | None
+) -> PartialInvoiceFields:
+    normalized = normalize("NFKC", filename or "")
+    stem = normalized.removesuffix(".pdf").strip()
+    stem = stem.replace("＿", "_")
+    parts = [p.strip() for p in re.split(r"[_\-]+", stem) if p.strip()]
+    deny_re = re.compile(company_deny_regex) if company_deny_regex else None
+
+    issue_date: str | None = None
+    date_idx: int | None = None
+    for idx, part in enumerate(parts):
+        parsed = _parse_ymd(part) or _normalize_yyyymmdd_candidate(part)
+        if parsed:
+            issue_date = parsed
+            date_idx = idx
+            break
+
+    amount: int | None = None
+    amount_idx: int | None = None
+    for idx, part in enumerate(parts):
+        parsed_amount = _parse_amount_token(part)
+        if parsed_amount is None:
+            continue
+        # If date exists, prefer amount after date.
+        if date_idx is not None and idx <= date_idx:
+            continue
+        amount = parsed_amount
+        amount_idx = idx
+        break
+    if amount is None:
+        for idx, part in enumerate(parts):
+            parsed_amount = _parse_amount_token(part)
+            if parsed_amount is None:
+                continue
+            # Guard: YYYYMMDD 形式の数値（日付値）を amount として誤採用しない。
+            # 20000101〜21001231 の範囲は日付リテラルとみなしてスキップ。
+            if 20_000_000 <= parsed_amount <= 21_001_231:
+                continue
+            amount = parsed_amount
+            amount_idx = idx
+            break
+
+    vendor: str | None = None
+    if date_idx is not None and date_idx > 0:
+        vendor = "_".join(parts[:date_idx]).strip()
+    elif amount_idx is not None and amount_idx > 0:
+        vendor = "_".join(parts[:amount_idx]).strip()
+    elif parts:
+        vendor = parts[0]
+
+    if vendor:
+        vendor = _clean_project_name(vendor)
+        if vendor and deny_re and deny_re.search(vendor):
+            vendor = None
+        # Ignore vendor candidates that are effectively numeric.
+        if vendor and re.fullmatch(r"[\d_ .-]+", vendor):
+            vendor = None
+
+    project: str | None = None
+    if amount_idx is not None and amount_idx + 1 < len(parts):
+        project = _clean_project_name("_".join(parts[amount_idx + 1 :]))
+    elif date_idx is not None and date_idx + 1 < len(parts):
+        project = _clean_project_name("_".join(parts[date_idx + 1 :]))
+
+    return PartialInvoiceFields(
+        vendor=vendor,
+        issue_date=issue_date,
+        amount=amount,
+        project=project,
+    )
+
+
+def _build_review_filename(
+    *,
+    received_dt: datetime,
+    attachment_name: str,
+    partial: PartialInvoiceFields,
+    review_reasons: Sequence[str] = (),
+    route_reason: str | None = None,
+) -> str:
+    stem = normalize("NFKC", attachment_name or "").removesuffix(".pdf").strip()
+    stem = _clean_project_name(stem) or "原本名不明"
+    vendor = _clean_project_name(partial.vendor) or "vendor不明"
+    issue_date = partial.issue_date or received_dt.strftime("%Y%m%d")
+    amount = f"{partial.amount:,}" if partial.amount is not None else "金額不明"
+    project = _clean_project_name(partial.project) or stem
+    prefix = "要確認"
+    if any(str(reason).startswith("non_invoice_signal:") for reason in review_reasons):
+        prefix = "要確認_非請求書候補"
+    elif route_reason == "new_project_candidate":
+        prefix = "要確認_新規案件候補"
+    candidate = f"{prefix}_{vendor}_{issue_date}_{amount}_{project}.pdf"
+    return _cleanup_rendered_filename(_sanitize_filename(candidate))
+
+
+def _processed_attachment_key(entry_id: str, attachment_name: str, sha256: str) -> str:
+    raw = "\n".join(
+        [
+            str(entry_id or "").strip(),
+            normalize("NFKC", str(attachment_name or "").strip()),
+            str(sha256 or "").strip(),
+        ]
+    )
+    return hashlib.sha1(raw.encode("utf-8", errors="ignore")).hexdigest()
+
+
+def _load_processed_attachment_index(path: Path) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    if not path.exists():
+        return index
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            key = str(record.get("key") or "").strip()
+            saved_path = str(record.get("saved_path") or "").strip()
+            if not key or not saved_path:
+                continue
+            index[key] = record
+    return index
+
+
+def _append_processed_attachment_record(path: Path, record: dict[str, Any]) -> None:
+    _ensure_dir(path.parent)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _is_within_dir(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except Exception:
+        return False
 
 
 def _extract_pdf_text_pypdf(path: Path, max_pages: int) -> str:
@@ -1032,6 +1682,11 @@ def _extract_pdf_text_yomitoku_ocr(pdf_path: Path, *, run_dir: Path) -> str:
             _render_pdf_first_page_png(pdf_path, tmp_img, dpi=dpi)
             analyzer = _get_yomitoku_analyzer(use_gpu=False, lite_mode=lite_mode)
             img = load_image(str(tmp_img))
+            # yomitoku 0.11.0: load_image() may return nested list
+            while isinstance(img, (list, tuple)):
+                if not img:
+                    raise RuntimeError(f"load_image returned empty: {tmp_img}")
+                img = img[0]
             result, _, _ = analyzer(img)
             text = _extract_text_from_yomitoku_result(result)
             if len(text) > len(best):
@@ -1052,6 +1707,104 @@ def _extract_pdf_text_yomitoku_ocr(pdf_path: Path, *, run_dir: Path) -> str:
             pass
 
 
+def _extract_invoice_fields_with_vision_ocr(
+    pdf_path: Path,
+    *,
+    company_deny_regex: str | None,
+    log_path: Path,
+    vision_ocr_provider: str,
+    sender: str | None = None,
+    subject: str | None = None,
+) -> ExtractedPdfFields | None:
+    try:
+        from vision_ocr import extract as _vision_extract
+    except Exception as e:
+        _append_log(log_path, f"[WARN] vision_ocr import failed: {pdf_path.name} error={e}")
+        return None
+
+    vr = _vision_extract(
+        pdf_path,
+        provider=vision_ocr_provider,
+        max_pages=3,
+        timeout_s=30.0,
+        sender_hint=sender,
+        subject_hint=subject,
+    )
+    if vr.error is not None:
+        _append_log(log_path, f"[WARN] vision_ocr returned error: {pdf_path.name} error={vr.error}")
+        return None
+
+    parsed_from_text = None
+    if vr.text:
+        try:
+            parsed_from_text = _extract_invoice_fields(
+                text=vr.text,
+                company_deny_regex=company_deny_regex,
+            )
+        except Exception as e:
+            _append_log(log_path, f"[WARN] vision_ocr text parse failed: {pdf_path.name} error={e}")
+
+    vendor = _clean_project_name(vr.vendor or (parsed_from_text.vendor if parsed_from_text else None))
+    if vendor and company_deny_regex and re.search(company_deny_regex, vendor):
+        vendor = None
+    issue_date = vr.issue_date or (parsed_from_text.issue_date if parsed_from_text else None)
+    amount = _parse_amount_token(str(vr.amount)) if vr.amount is not None else None
+    if amount is None and parsed_from_text is not None:
+        amount = parsed_from_text.amount
+    invoice_no = vr.invoice_no or (parsed_from_text.invoice_no if parsed_from_text else None)
+    project = parsed_from_text.project if parsed_from_text else None
+    raw_ocr_text = vr.text or (parsed_from_text.raw_ocr_text if parsed_from_text else "")
+
+    _append_log(
+        log_path,
+        "[INFO] vision_ocr result: "
+        f"{pdf_path.name} provider={vr.provider} confidence={vr.confidence} "
+        f"category={vr.vendor_category or '-'} manual={vr.requires_manual} "
+        f"reasons={','.join(vr.review_reasons) if vr.review_reasons else '-'}",
+    )
+
+    if not vendor or not issue_date or amount is None:
+        _append_log(
+            log_path,
+            "[INFO] vision_ocr incomplete: "
+            f"{pdf_path.name} vendor={'y' if vendor else 'n'} "
+            f"date={'y' if issue_date else 'n'} amount={'y' if amount is not None else 'n'}",
+        )
+        return None
+
+    return ExtractedPdfFields(
+        vendor=vendor,
+        issue_date=issue_date,
+        amount=amount,
+        invoice_no=invoice_no,
+        project=project,
+        raw_ocr_text=raw_ocr_text,
+        source="vision_ocr",
+        vendor_category=vr.vendor_category,
+        requires_manual=vr.requires_manual,
+        review_reasons=tuple(vr.review_reasons),
+    )
+
+
+def _try_extract_text_method(
+    extractor: Callable[[], str],
+    *,
+    company_deny_regex: str | None,
+    pdf_path: Path,
+    log_path: Path,
+    warn_prefix: str,
+) -> ExtractedPdfFields | None:
+    """Run one text-extraction method and parse invoice fields. Logs WARN on failure."""
+    try:
+        text = extractor()
+        fields = _extract_invoice_fields(text=text, company_deny_regex=company_deny_regex)
+        if fields:
+            return fields
+    except Exception as e:
+        _append_log(log_path, f"[WARN] {warn_prefix}: {pdf_path.name} error={e}")
+    return None
+
+
 def _extract_invoice_fields_from_pdf(
     pdf_path: Path,
     *,
@@ -1059,56 +1812,86 @@ def _extract_invoice_fields_from_pdf(
     max_pages: int,
     run_dir: Path,
     log_path: Path,
+    vision_ocr_enabled: bool = False,
+    vision_ocr_provider: str = "openai",
+    sender: str | None = None,
+    subject: str | None = None,
 ) -> ExtractedPdfFields | None:
     # 1) pypdf
-    try:
-        if _PYPDF_AVAILABLE:
-            text = _extract_pdf_text_pypdf(pdf_path, max_pages=max_pages)
-            fields = _extract_invoice_fields(text=text, company_deny_regex=company_deny_regex)
-            if fields:
-                return fields
-    except Exception as e:
-        _append_log(log_path, f"[WARN] pypdf text extract failed: {pdf_path.name} error={e}")
+    if _PYPDF_AVAILABLE:
+        fields = _try_extract_text_method(
+            lambda: _extract_pdf_text_pypdf(pdf_path, max_pages=max_pages),
+            company_deny_regex=company_deny_regex,
+            pdf_path=pdf_path,
+            log_path=log_path,
+            warn_prefix="pypdf text extract failed",
+        )
+        if fields:
+            return fields
 
     # 2) PyMuPDF
-    try:
-        if _PYMUPDF_AVAILABLE:
-            text = _extract_pdf_text_pymupdf(pdf_path, max_pages=max_pages)
-            fields = _extract_invoice_fields(text=text, company_deny_regex=company_deny_regex)
-            if fields:
-                return fields
-    except Exception as e:
-        _append_log(log_path, f"[WARN] pymupdf text extract failed: {pdf_path.name} error={e}")
+    if _PYMUPDF_AVAILABLE:
+        fields = _try_extract_text_method(
+            lambda: _extract_pdf_text_pymupdf(pdf_path, max_pages=max_pages),
+            company_deny_regex=company_deny_regex,
+            pdf_path=pdf_path,
+            log_path=log_path,
+            warn_prefix="pymupdf text extract failed",
+        )
+        if fields:
+            return fields
 
-    # 3) tesseract OCR
-    try:
-        if _TESSERACT_AVAILABLE and _PYMUPDF_AVAILABLE:
-            text = _extract_pdf_text_tesseract_ocr(pdf_path, run_dir=run_dir)
-            fields = _extract_invoice_fields(text=text, company_deny_regex=company_deny_regex)
+    # 3) Vision API OCR (config-driven, prioritized cloud OCR)
+    if vision_ocr_enabled:
+        try:
+            fields = _extract_invoice_fields_with_vision_ocr(
+                pdf_path,
+                company_deny_regex=company_deny_regex,
+                log_path=log_path,
+                vision_ocr_provider=vision_ocr_provider,
+                sender=sender,
+                subject=subject,
+            )
             if fields:
                 return fields
-    except Exception as e:
-        _append_log(log_path, f"[WARN] tesseract ocr failed: {pdf_path.name} error={e}")
+        except Exception as e:
+            _append_log(log_path, f"[WARN] vision_ocr failed: {pdf_path.name} error={e}")
 
-    # 3.5) EasyOCR (faster than YomiToku, good Japanese support)
-    try:
-        if _EASYOCR_AVAILABLE and _PYMUPDF_AVAILABLE:
-            text = _extract_pdf_text_easyocr_ocr(pdf_path, run_dir=run_dir)
-            fields = _extract_invoice_fields(text=text, company_deny_regex=company_deny_regex)
-            if fields:
-                return fields
-    except Exception as e:
-        _append_log(log_path, f"[WARN] easyocr ocr failed: {pdf_path.name} error={e}")
+    # 4) tesseract OCR
+    if _TESSERACT_AVAILABLE and _PYMUPDF_AVAILABLE:
+        fields = _try_extract_text_method(
+            lambda: _extract_pdf_text_tesseract_ocr(pdf_path, run_dir=run_dir),
+            company_deny_regex=company_deny_regex,
+            pdf_path=pdf_path,
+            log_path=log_path,
+            warn_prefix="tesseract ocr failed",
+        )
+        if fields:
+            return fields
 
-    # 4) YomiToku OCR (optional)
-    try:
-        if _YOMITOKU_AVAILABLE and _PYMUPDF_AVAILABLE:
-            text = _extract_pdf_text_yomitoku_ocr(pdf_path, run_dir=run_dir)
-            fields = _extract_invoice_fields(text=text, company_deny_regex=company_deny_regex)
-            if fields:
-                return fields
-    except Exception as e:
-        _append_log(log_path, f"[WARN] yomitoku ocr failed: {pdf_path.name} error={e}")
+    # 5) EasyOCR (faster than YomiToku, good Japanese support)
+    if _EASYOCR_AVAILABLE and _PYMUPDF_AVAILABLE:
+        fields = _try_extract_text_method(
+            lambda: _extract_pdf_text_easyocr_ocr(pdf_path, run_dir=run_dir),
+            company_deny_regex=company_deny_regex,
+            pdf_path=pdf_path,
+            log_path=log_path,
+            warn_prefix="easyocr ocr failed",
+        )
+        if fields:
+            return fields
+
+    # 6) YomiToku OCR (optional fallback)
+    if _YOMITOKU_AVAILABLE and _PYMUPDF_AVAILABLE:
+        fields = _try_extract_text_method(
+            lambda: _extract_pdf_text_yomitoku_ocr(pdf_path, run_dir=run_dir),
+            company_deny_regex=company_deny_regex,
+            pdf_path=pdf_path,
+            log_path=log_path,
+            warn_prefix="yomitoku ocr failed",
+        )
+        if fields:
+            return fields
 
     return None
 
@@ -1231,6 +2014,30 @@ def _debug_extract_invoice_fields_from_pdf(
     return None
 
 
+def _build_invoice_fields_from_pattern(
+    vendor: str,
+    date_str: str,
+    amount_str: str,
+    project: str | None,
+    deny_re: re.Pattern | None,
+) -> ExtractedPdfFields | None:
+    """Deny-list check + amount parse → ExtractedPdfFields or None."""
+    if not date_str:
+        return None
+    if deny_re and deny_re.search(vendor):
+        return None
+    try:
+        return ExtractedPdfFields(
+            vendor=vendor,
+            issue_date=date_str,
+            amount=int(amount_str),
+            invoice_no=None,
+            project=project,
+        )
+    except ValueError:
+        return None
+
+
 def _extract_invoice_fields_from_filename(
     filename: str, company_deny_regex: str | None
 ) -> ExtractedPdfFields | None:
@@ -1251,53 +2058,42 @@ def _extract_invoice_fields_from_filename(
     stem = normalized.removesuffix(".pdf")
 
     deny_re = re.compile(company_deny_regex) if company_deny_regex else None
+    project: str | None = None
 
     # Pattern 1 & 2: vendor_YYYYMMDD_amount[_construction]
     # Example: 名鉄協商_20251227_400.pdf or 名鉄協商_20251227_400_東海興業.pdf
     # Also handles 9-digit date typos (e.g. 202501225 → 20251225 by removing the extra digit).
     pattern_a = re.compile(
-        r"^(?P<vendor>.+?)_(?P<date>\d{7,9})_(?P<amount>[\d,，]+)(?:_(?P<construction>.+))?$"
+        r"^(?P<vendor>.+?)_(?P<date>\d{6,9})_(?P<amount>[\d,，]+)(?:[_（【([](?P<construction>.+))?$"
     )
     m = pattern_a.match(stem)
     if m:
         vendor = m.group("vendor")
         date_str = m.group("date")
+        project = _clean_project_name(m.group("construction"))
         amount_str = m.group("amount").replace(",", "").replace("，", "")
 
         # Validate / correct date_str to exactly 8 digits (YYYYMMDD).
         if len(date_str) != 8:
-            corrected: str | None = None
-            if len(date_str) == 9:
-                # Try removing each digit to find the first valid YYYYMMDD.
-                for remove_pos in range(9):
-                    cand = date_str[:remove_pos] + date_str[remove_pos + 1:]
-                    if cand[:2] == "20":
-                        try:
-                            y, mo, d = int(cand[0:4]), int(cand[4:6]), int(cand[6:8])
-                            if 2000 <= y <= 2100 and 1 <= mo <= 12 and 1 <= d <= 31:
-                                corrected = cand
-                                break
-                        except (ValueError, IndexError):
-                            pass
+            corrected = _normalize_yyyymmdd_candidate(date_str)
             if corrected is not None:
                 date_str = corrected
+            elif len(date_str) == 6:
+                # YYMMDD: 年2桁省略。例: "260125" → "20260125"
+                # ここ（日付スロット位置）でのみ解釈。グローバルには適用しない。
+                try:
+                    yy, mo, d = int(date_str[0:2]), int(date_str[2:4]), int(date_str[4:6])
+                    y = 2000 + yy  # 2000-2099 と仮定
+                    datetime(y, mo, d)
+                    date_str = f"{y:04d}{mo:02d}{d:02d}"
+                except (ValueError, IndexError):
+                    date_str = ""
             else:
                 date_str = ""  # Cannot recover a valid date; fall through.
 
-        if date_str:
-            if deny_re and deny_re.search(vendor):
-                return None
-
-            try:
-                amount = int(amount_str)
-                return ExtractedPdfFields(
-                    vendor=vendor,
-                    issue_date=date_str,
-                    amount=amount,
-                    invoice_no=None,
-                )
-            except ValueError:
-                pass
+        result = _build_invoice_fields_from_pattern(vendor, date_str, amount_str, project, deny_re)
+        if result is not None:
+            return result
 
     # Pattern 3: vendor-YYYYMMDD-amount[-construction] (dash separator)
     pattern_dash = re.compile(
@@ -1307,21 +2103,12 @@ def _extract_invoice_fields_from_filename(
     if m:
         vendor = m.group("vendor")
         date_str = m.group("date")
+        project = _clean_project_name(m.group("construction"))
         amount_str = m.group("amount").replace(",", "").replace("，", "")
 
-        if deny_re and deny_re.search(vendor):
-            return None
-
-        try:
-            amount = int(amount_str)
-            return ExtractedPdfFields(
-                vendor=vendor,
-                issue_date=date_str,
-                amount=amount,
-                invoice_no=None,
-            )
-        except ValueError:
-            pass
+        result = _build_invoice_fields_from_pattern(vendor, date_str, amount_str, project, deny_re)
+        if result is not None:
+            return result
 
     # Pattern 4: vendor_YYYY.MM.DD_amount[_construction] (dot-date)
     pattern_dot = re.compile(
@@ -1334,21 +2121,12 @@ def _extract_invoice_fields_from_filename(
         month = m.group("month").zfill(2)
         day = m.group("day").zfill(2)
         date_str = f"{year}{month}{day}"
+        project = _clean_project_name(m.group("construction"))
         amount_str = m.group("amount").replace(",", "").replace("，", "")
 
-        if deny_re and deny_re.search(vendor):
-            return None
-
-        try:
-            amount = int(amount_str)
-            return ExtractedPdfFields(
-                vendor=vendor,
-                issue_date=date_str,
-                amount=amount,
-                invoice_no=None,
-            )
-        except ValueError:
-            pass
+        result = _build_invoice_fields_from_pattern(vendor, date_str, amount_str, project, deny_re)
+        if result is not None:
+            return result
 
     # Pattern 5: YYYY,MM,DDvendoramount.pdf (legacy comma format)
     # Example: 2025,12,27名鉄協商400.pdf
@@ -1357,6 +2135,7 @@ def _extract_invoice_fields_from_filename(
     )
     m = pattern_legacy.match(stem)
     if m:
+        project = None
         vendor = m.group("vendor")
         year = m.group("year")
         month = m.group("month").zfill(2)
@@ -1364,19 +2143,9 @@ def _extract_invoice_fields_from_filename(
         date_str = f"{year}{month}{day}"
         amount_str = m.group("amount").replace(",", "").replace("，", "")
 
-        if deny_re and deny_re.search(vendor):
-            return None
-
-        try:
-            amount = int(amount_str)
-            return ExtractedPdfFields(
-                vendor=vendor,
-                issue_date=date_str,
-                amount=amount,
-                invoice_no=None,
-            )
-        except ValueError:
-            pass
+        result = _build_invoice_fields_from_pattern(vendor, date_str, amount_str, project, deny_re)
+        if result is not None:
+            return result
 
     return None
 
@@ -1389,18 +2158,8 @@ def _correct_vendor_ocr(vendor: str) -> str:
     return vendor
 
 
-def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> ExtractedPdfFields | None:
-    text = _normalize_text(text)
-    # Normalize spaced-out CJK characters (PDF text extraction artifact).
-    # Example: "東 海 イ ン プ ル 建 設" → "東海インプル建設"
-    text = re.sub(r"(?<=[^\x00-\x7f]) (?=[^\x00-\x7f])", "", text)
-    # Fix common OCR reversals (e.g. some OCR engines reverse "株式会社" to "会社株式").
-    text = text.replace("会社株式", "株式会社")
-    # Normalize spaced commas inside numbers: "1, 651,980" → "1,651,980"
-    text = re.sub(r"(\d),\s+(\d)", r"\1,\2", text)
+def _extract_vendor_from_text(text: str, company_deny_regex: str | None) -> str | None:
     deny_re = re.compile(company_deny_regex) if company_deny_regex else None
-
-    # Vendor candidate lines (prefer early, exclude recipient markers).
     vendor_candidates: list[str] = []
     for line in [ln.strip() for ln in text.splitlines() if ln.strip()]:
         if len(vendor_candidates) >= 30:
@@ -1408,18 +2167,14 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
         if ("様" in line) or ("御中" in line):
             continue
 
-        # If both recipient and vendor appear in the same line, remove the recipient and re-check.
         candidate = line
         if deny_re and deny_re.search(candidate):
             candidate = deny_re.sub(" ", candidate).strip()
             if not candidate:
                 continue
-            # Skip if only a bare corporate suffix remains (no actual company name).
-            # e.g. "(株)" or "株式会社" alone after removing the recipient company name.
             if re.fullmatch(r"[（(](?:株|有|合)[）)]|株式会社|有限会社|合同会社", candidate):
                 continue
 
-        # Remove common prefixes like "発行元:" / "会社名:" etc.
         candidate = re.sub(
             r"^(発行元|会社名|請求元|取引先|支払先|相手先|販売元|納入元)\s*[:：]?\s*",
             "",
@@ -1428,16 +2183,15 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
 
         if not VENDOR_HINT_RE.search(candidate):
             continue
-        # Truncate at postal-code / contact-info markers (OCR often runs company name
-        # and address onto the same line with no separator).
         if "〒" in candidate:
             candidate = candidate[: candidate.index("〒")].strip()
         if not candidate:
             continue
         vendor_candidates.append(candidate)
-    vendor = vendor_candidates[0] if vendor_candidates else None
+    return vendor_candidates[0] if vendor_candidates else None
 
-    # Issue date (prefer labeled).
+
+def _extract_issue_date_from_text(text: str) -> str | None:
     issue_date: str | None = None
     for m in DATE_LABEL_RE.finditer(text):
         parsed = _parse_ymd(m.group(2))
@@ -1455,12 +2209,6 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
             issue_date = uniq[0]
 
     if not issue_date:
-        # Wareki (Japanese era year) support.  Reiwa (令和) started May 2019;
-        # western_year = era_year + 2018.
-        #
-        # Step 1: prefer a date that is preceded by a date-label keyword
-        # (e.g. "請求年月日:令和7年12月25日").  This avoids accidentally picking
-        # up work-period start/end dates that appear earlier in the text.
         _WAREKI_LABEL_RE = re.compile(
             r"(?:請求(?:年月)?日|発行(?:年月)?日|作成(?:年月)?日|日付)\s*[:：]?\s*"
             r"(?:令和\s*|R\s*)?([0-9]{1,2})\s*年\s*([0-9]{1,2})\s*月\s*([0-9]{1,2})\s*日"
@@ -1473,15 +2221,13 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
                 break
 
     if not issue_date:
-        # Step 2: unlabeled wareki date, but skip dates followed by "~" / "〜" / "迄"
-        # which indicate the start of a construction-period range, not an invoice date.
         _WAREKI_RE = re.compile(
             r"(?:令和\s*|R\s*)?([0-9]{1,2})\s*年\s*([0-9]{1,2})\s*月\s*([0-9]{1,2})\s*日"
         )
         for wm in _WAREKI_RE.finditer(text):
             after = text[wm.end() : wm.end() + 10].lstrip()
             if after and after[0] in "~〜迄":
-                continue  # skip range-start dates
+                continue
             era_y, mo, d = int(wm.group(1)), int(wm.group(2)), int(wm.group(3))
             if 1 <= era_y <= 20 and 1 <= mo <= 12 and 1 <= d <= 31:
                 western_y = 2018 + era_y
@@ -1489,9 +2235,6 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
                 break
 
     if not issue_date:
-        # Step 3: OCR sometimes drops the 月 character and spaces out the remaining
-        # digits, e.g. "7年1 2 2 5 日締切分" (should be "令和7年12月25日").
-        # Detect the pattern N年 d d d d 日 and interpret the 4 digits as MMDD.
         _WAREKI_SPACED_RE = re.compile(
             r"([0-9]{1,2})\s*年\s*([0-9])\s+([0-9])\s+([0-9])\s+([0-9])\s*日"
         )
@@ -1504,11 +2247,10 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
                 issue_date = f"{western_y:04}{mo:02}{d:02}"
                 break
 
-    # Amount (prefer labeled by priority; fallback to numbers with comma + 円).
-    #
-    # Priority matters because invoices can contain multiple amounts such as:
-    # - ご請求金額(税込)
-    # - 支払決定金額 (actual payable amount)
+    return issue_date
+
+
+def _extract_amount_from_text(text: str) -> int | None:
     def _amount_label_priority(label: str) -> int:
         if "支払決定" in label:
             return 0
@@ -1522,40 +2264,53 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
     for m in AMOUNT_LABEL_RE.finditer(text):
         label = m.group(1)
         raw = m.group(2).replace(",", "").strip()
-        # Skip 0-yen values: labels like "前回御請求額" contain "請求額" as a
-        # substring and the adjacent cell often holds 0 (no carry-over balance).
         if raw.isdigit() and int(raw) > 0:
             candidates.append((_amount_label_priority(label), int(raw)))
 
     if candidates:
         candidates.sort(key=lambda x: (x[0], -x[1]))
-        amount = candidates[0][1]
-    else:
-        amounts: list[int] = []
-        # Currency symbol.
-        for m in re.finditer(r"[¥￥]\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)", text):
-            raw = m.group(1).replace(",", "")
-            if raw.isdigit():
-                amounts.append(int(raw))
-        # Comma + 円.
-        for m in re.finditer(r"([0-9]{1,3}(?:,[0-9]{3})+)\s*円", text):
-            raw = m.group(1).replace(",", "")
-            if raw.isdigit():
-                amounts.append(int(raw))
-        # Comma numbers without 円 (last resort).
-        if not amounts:
-            for m in re.finditer(r"([0-9]{1,3}(?:,[0-9]{3})+)", text):
-                raw = m.group(1).replace(",", "")
-                if raw.isdigit():
-                    v = int(raw)
-                    if v >= 1000:
-                        amounts.append(v)
-        amount = max(amounts) if amounts else None
+        return candidates[0][1]
 
-    invoice_no: str | None = None
+    amounts: list[int] = []
+    for m in re.finditer(r"[¥￥]\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)", text):
+        raw = m.group(1).replace(",", "")
+        if raw.isdigit():
+            amounts.append(int(raw))
+    for m in re.finditer(r"([0-9]{1,3}(?:,[0-9]{3})+)\s*円", text):
+        raw = m.group(1).replace(",", "")
+        if raw.isdigit():
+            amounts.append(int(raw))
+    if not amounts:
+        for m in re.finditer(r"([0-9]{1,3}(?:,[0-9]{3})+)", text):
+            raw = m.group(1).replace(",", "")
+            if raw.isdigit():
+                v = int(raw)
+                if v >= 1000:
+                    amounts.append(v)
+    return max(amounts) if amounts else None
+
+
+def _extract_invoice_no_from_text(text: str) -> str | None:
     m_no = INVOICE_NO_RE.search(text)
     if m_no:
-        invoice_no = m_no.group(2).strip() or None
+        return m_no.group(2).strip() or None
+    return None
+
+
+def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> ExtractedPdfFields | None:
+    text = _normalize_text(text)
+    # Normalize spaced-out CJK characters (PDF text extraction artifact).
+    # Example: "東 海 イ ン プ ル 建 設" → "東海インプル建設"
+    text = re.sub(r"(?<=[^\x00-\x7f]) (?=[^\x00-\x7f])", "", text)
+    # Fix common OCR reversals (e.g. some OCR engines reverse "株式会社" to "会社株式").
+    text = text.replace("会社株式", "株式会社")
+    # Normalize spaced commas inside numbers: "1, 651,980" → "1,651,980"
+    text = re.sub(r"(\d),\s+(\d)", r"\1,\2", text)
+
+    vendor = _extract_vendor_from_text(text, company_deny_regex)
+    issue_date = _extract_issue_date_from_text(text)
+    amount = _extract_amount_from_text(text)
+    invoice_no = _extract_invoice_no_from_text(text)
 
     if not vendor or not issue_date or amount is None:
         return None
@@ -1563,7 +2318,7 @@ def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> Extrac
     # Apply OCR corrections to vendor name (pdf-ocr Skill).
     vendor = _correct_vendor_ocr(vendor)
 
-    return ExtractedPdfFields(vendor=vendor, issue_date=issue_date, amount=amount, invoice_no=invoice_no)
+    return ExtractedPdfFields(vendor=vendor, issue_date=issue_date, amount=amount, invoice_no=invoice_no, raw_ocr_text=text)
 
 
 def _render_template(template: str, values: dict[str, str]) -> str:
@@ -1573,12 +2328,173 @@ def _render_template(template: str, values: dict[str, str]) -> str:
         raise ValueError(f"rename template has unknown key: {e}") from e
 
 
+def _load_bool_safe(raw: dict, key: str, default: bool = False) -> bool:
+    """JSON config から bool を安全に読み込む。
+    文字列 "false" を bool(False) に変換し、意図しないデフォルト True を防ぐ。
+    """
+    if key not in raw:
+        return default
+    value = raw[key]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized == "true":
+            return True
+        if normalized == "false":
+            return False
+    raise ValueError(f"config.{key} must be bool or 'true'/'false' string, got: {value!r}")
+
+
 def _move_file(src: Path, dst: Path) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(src), str(dst))
 
 
-def _load_config(path: Path) -> ToolConfig:
+def _load_project_master(path) -> list:
+    """project_master.xlsx から ProjectMasterEntry リストを読み込む"""
+    import openpyxl
+    from datetime import date
+
+    if not Path(path).exists():
+        print(f"[WARN] project_master.xlsx が見つかりません: {path}")
+        return []
+
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    ws = wb.active
+
+    headers = [str(cell.value).strip() if cell.value is not None else "" for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+
+    def col(row, name):
+        try:
+            idx = headers.index(name)
+            v = row[idx].value
+            return str(v).strip() if v is not None else ""
+        except (ValueError, IndexError):
+            return ""
+
+    def split_keywords(raw_value: str) -> tuple[str, ...]:
+        prepared = re.sub(r"(?<=\d),(?=\d)", "", str(raw_value or ""))
+        prepared = prepared.replace("、", ",").replace(";", ",")
+        keywords: list[str] = []
+        for part in prepared.split(","):
+            kw = part.strip()
+            if not kw:
+                continue
+            norm = _normalize_for_match(kw)
+            if len(norm) < 3:
+                continue
+            if norm.isdigit() and len(norm) < 4:
+                continue
+            if kw not in keywords:
+                keywords.append(kw)
+        return tuple(keywords)
+
+    entries = []
+    today = date.today()
+    for row in ws.iter_rows(min_row=2):
+        kojimei = col(row, "工事名称")
+        if not kojimei:
+            continue
+        status = col(row, "status") or "active"
+        if status != "active":
+            continue
+        end_date_str = col(row, "end_date")
+        if end_date_str:
+            try:
+                end_date = date.fromisoformat(end_date_str)
+                if end_date < today:
+                    continue
+            except ValueError:
+                pass
+        kw_raw = col(row, "キーワード")
+        kw_list = split_keywords(kw_raw) if kw_raw else ()
+        entries.append(ProjectMasterEntry(
+            kojiban=col(row, "工事番号"),
+            kojimei=kojimei,
+            busho=col(row, "部署") or "新築",
+            keywords=kw_list,
+            start_date=col(row, "start_date"),
+            end_date=end_date_str,
+            status=status,
+        ))
+
+    wb.close()
+    print(f"[INFO] project_master.xlsx から {len(entries)} 件のルーティングルールを読み込みました: {path}")
+    return entries
+
+
+def _resolve_project_master_path(config_dir: Path) -> Path:
+    versioned = sorted(config_dir.glob("project_master_v*.xlsx"))
+    if versioned:
+        return versioned[-1]
+    fallback = config_dir / "project_master.xlsx"
+    return fallback
+
+
+def _load_web_download_config(raw_section: dict | None) -> Any:
+    """Parse web_download config section into WebDownloadConfig or None."""
+    if not raw_section:
+        return None
+    if not _WEB_DOWNLOAD_AVAILABLE:
+        return None
+    vendors = []
+    for v in raw_section.get("vendors", []):
+        vendors.append(VendorWebConfig(
+            handler_id=str(v.get("handler_id", "")),
+            target_name=str(v.get("target_name", "")),
+            sender_pattern=str(v.get("sender_pattern", "")),
+            url_pattern=str(v.get("url_pattern", "")),
+            options=dict(v.get("options", {})),
+        ))
+    return WebDownloadConfig(
+        enabled=bool(raw_section.get("enabled", False)),
+        headless=bool(raw_section.get("headless", True)),
+        download_timeout_ms=int(raw_section.get("download_timeout_ms", 30000)),
+        vendors=tuple(vendors),
+    )
+
+
+def _resolve_and_load_project_master(
+    config_path: Path, project_master_override: Path | None
+) -> tuple[list, Path]:
+    project_master_path = project_master_override or _resolve_project_master_path(config_path.parent)
+    if project_master_override is not None:
+        print(f"[INFO] project_master override を使用します: {project_master_path}")
+    pm_entries = _load_project_master(project_master_path)
+    if not pm_entries and project_master_path.exists():
+        print(f"[WARN] project_master.xlsx は存在しますが有効なルールが0件です: {project_master_path}")
+    return pm_entries, project_master_path
+
+
+def _apply_fallback_subdir_timestamp(routing: RoutingConfig) -> RoutingConfig:
+    if not routing.fallback_subdir:
+        return routing
+    ts = datetime.now().strftime("%Y%m%d_%H%M")
+    return RoutingConfig(
+        enabled=routing.enabled,
+        fallback_subdir=f"{routing.fallback_subdir}_{ts}",
+        rules=routing.rules,
+        sender_rules=routing.sender_rules,
+        ban_senders=routing.ban_senders,
+        threshold=routing.threshold,
+        tie_margin=routing.tie_margin,
+        vision_ocr_enabled=routing.vision_ocr_enabled,
+        vision_ocr_provider=routing.vision_ocr_provider,
+    )
+
+
+def _parse_keywords(raw: Any) -> list[str]:
+    """Parse keywords value (list[str] | str | None) → list of non-empty stripped strings."""
+    if isinstance(raw, list):
+        return [str(kw).strip() for kw in raw if str(kw).strip()]
+    if isinstance(raw, str):
+        s = raw.strip()
+        return [s] if s else []
+    return []
+
+
+def _load_config(path: Path, project_master_override: Path | None = None) -> ToolConfig:
     # PowerShell's Set-Content can emit UTF-8 BOM; accept it.
     raw = json.loads(path.read_text(encoding="utf-8-sig"))
     outlook_raw = raw.get("outlook") if isinstance(raw, dict) else None
@@ -1634,7 +2550,12 @@ def _load_config(path: Path) -> ToolConfig:
                 if print_raw.get("printer_name")
                 else None
             ),
-            method=str(print_raw.get("method", "shell")).strip() or "shell",
+            method=(str(print_raw.get("method", "shell")).strip() or "shell").lower(),
+            pdf_output_dir=(
+                str(print_raw["pdf_output_dir"]).strip()
+                if print_raw.get("pdf_output_dir")
+                else None
+            ),
         )
 
     mail_raw = raw.get("mail") if isinstance(raw, dict) else None
@@ -1659,10 +2580,10 @@ def _load_config(path: Path) -> ToolConfig:
             or "{vendor_short}",
             file_name_template=str(
                 rename_raw.get(
-                    "file_name_template", "{vendor_short}__{issue_date}__{amount}.pdf"
+                    "file_name_template", "{vendor}_{issue_date}_{amount_comma}_{project}.pdf"
                 )
             ).strip()
-            or "{vendor_short}__{issue_date}__{amount}.pdf",
+            or "{vendor}_{issue_date}_{amount_comma}_{project}.pdf",
             company_deny_regex=(
                 str(rename_raw["company_deny_regex"]).strip()
                 if rename_raw.get("company_deny_regex")
@@ -1671,6 +2592,73 @@ def _load_config(path: Path) -> ToolConfig:
             max_pages=int(rename_raw.get("max_pages", 2)),
             filename_first=bool(rename_raw.get("filename_first", True)),
         )
+
+    routing_raw = raw.get("routing") if isinstance(raw, dict) else None
+    routing = RoutingConfig()
+    if isinstance(routing_raw, dict):
+        parsed_rules: list[RoutingRule] = []
+        rules_raw = routing_raw.get("rules")
+        if isinstance(rules_raw, list):
+            for rule_raw in rules_raw:
+                if not isinstance(rule_raw, dict):
+                    continue
+                subdir = str(rule_raw.get("subdir", "")).strip()
+                if not subdir:
+                    continue
+                kws: list[str] = _parse_keywords(rule_raw.get("keywords"))
+                parsed_rules.append(RoutingRule(subdir=subdir, keywords=tuple(kws)))
+        elif isinstance(rules_raw, dict):
+            for subdir_raw, keywords_raw in rules_raw.items():
+                subdir = str(subdir_raw).strip()
+                if not subdir:
+                    continue
+                kws: list[str] = _parse_keywords(keywords_raw)
+                parsed_rules.append(RoutingRule(subdir=subdir, keywords=tuple(kws)))
+
+        # threshold: config指定があればそれを使う。なければデフォルト1
+        cfg_threshold = routing_raw.get("threshold")
+        threshold_val = int(cfg_threshold) if cfg_threshold is not None else 1
+        # tie_margin: config指定があればfloat。なければNone（タイ判定しない）
+        cfg_tie_margin = routing_raw.get("tie_margin")
+        tie_margin_val = float(cfg_tie_margin) if cfg_tie_margin is not None else None
+
+        # sender_rules: L1 sender-based routing rules
+        parsed_sender_rules: list[SenderRule] = []
+        sr_raw = routing_raw.get("sender_rules")
+        if isinstance(sr_raw, list):
+            for sr in sr_raw:
+                if not isinstance(sr, dict):
+                    continue
+                s_sender = str(sr.get("sender", "")).lower().strip()
+                s_subdir = str(sr.get("subdir", "")).strip()
+                if not s_sender or not s_subdir:
+                    continue
+                s_kws: list[str] = _parse_keywords(sr.get("keywords"))
+                parsed_sender_rules.append(SenderRule(sender=s_sender, subdir=s_subdir, keywords=tuple(s_kws)))
+
+        # ban_senders: senders always routed to fallback
+        ban_raw = routing_raw.get("ban_senders")
+        parsed_ban: set[str] = set()
+        if isinstance(ban_raw, list):
+            for b in ban_raw:
+                b_s = str(b).lower().strip()
+                if b_s:
+                    parsed_ban.add(b_s)
+
+        routing = RoutingConfig(
+            enabled=bool(routing_raw.get("enabled", False)),
+            fallback_subdir=str(routing_raw.get("fallback_subdir", "")).strip(),
+            rules=tuple(parsed_rules),
+            sender_rules=tuple(parsed_sender_rules),
+            ban_senders=frozenset(parsed_ban),
+            threshold=threshold_val,
+            tie_margin=tie_margin_val,
+            vision_ocr_enabled=bool(routing_raw.get("vision_ocr_enabled", False)),
+            vision_ocr_provider=str(routing_raw.get("vision_ocr_provider", "openai")),
+        )
+
+    pm_entries, project_master_path = _resolve_and_load_project_master(path, project_master_override)
+    routing = _apply_fallback_subdir_timestamp(routing)
 
     cfg = ToolConfig(
         artifact_dir=str(raw.get("artifact_dir", DEFAULT_ARTIFACT_DIR)).strip()
@@ -1681,8 +2669,14 @@ def _load_config(path: Path) -> ToolConfig:
         print=prn,
         mail=mail,
         rename=ren,
-        fail_on_url_only_mail=bool(raw.get("fail_on_url_only_mail", True)),
-        decrypt_password_window_minutes=int(raw.get("decrypt_password_window_minutes", 20)),
+        routing=routing,
+        fail_on_url_only_mail=_load_bool_safe(raw, "fail_on_url_only_mail", default=False),
+        enable_zip_processing=_load_bool_safe(raw, "enable_zip_processing", default=False),
+        enable_pdf_decryption=_load_bool_safe(raw, "enable_pdf_decryption", default=False),
+        project_master=tuple(pm_entries),
+        project_master_path=str(project_master_path),
+        enable_web_download=_load_bool_safe(raw, "enable_web_download", default=False),
+        web_download=_load_web_download_config(raw.get("web_download")),
     )
 
     return cfg
@@ -1690,6 +2684,43 @@ def _load_config(path: Path) -> ToolConfig:
 
 def _is_unc_path(path: Path) -> bool:
     return str(path).startswith("\\\\")
+
+
+def _save_dir_bracket_fallback_candidates(path: Path) -> list[Path]:
+    """
+    Build fallback candidates for common bracket variants:
+    - 全角: 【】
+    - 半角: []
+    """
+
+    raw = str(path)
+    if ("【" in raw) or ("】" in raw):
+        alt = raw.replace("【", "[").replace("】", "]")
+    elif ("[" in raw) or ("]" in raw):
+        alt = raw.replace("[", "【").replace("]", "】")
+    else:
+        return []
+    if alt != raw:
+        return [Path(alt)]
+    return []
+
+
+def _resolve_save_dir_with_fallback(path: Path, *, timeout_seconds: float, log_path: Path) -> Path:
+    """
+    If the configured save_dir is unreachable, try bracket-style fallbacks
+    once and use the first reachable candidate.
+    """
+
+    primary = _test_path_with_timeout(path, timeout_seconds=timeout_seconds)
+    if primary is True:
+        return path
+
+    for cand in _save_dir_bracket_fallback_candidates(path):
+        exists = _test_path_with_timeout(cand, timeout_seconds=timeout_seconds)
+        if exists is True:
+            _append_log(log_path, f"[WARN] save_dir fallback used: {path} -> {cand}")
+            return cand
+    return path
 
 
 def _ps_single_quote(value: str) -> str:
@@ -1736,11 +2767,14 @@ def _outlook_namespace(profile_name: str | None = None) -> Any:
     if not _OUTLOOK_AVAILABLE:
         raise RuntimeError("Outlook COM が利用できません (pywin32/win32com が必要です)。")
     _install_com_message_filter()
+    is_new_instance = False
     try:
-        # Prefer an existing Outlook session (already logged-in, correct profile).
+        # 既存の Outlook セッションを優先して接続（ログイン済み・正しいプロファイル）
         outlook = win32.GetActiveObject("Outlook.Application")
     except Exception:
+        # Outlook が起動していない場合は新規起動
         outlook = win32.Dispatch("Outlook.Application")
+        is_new_instance = True
     mapi = _com_retry(lambda: outlook.GetNamespace("MAPI"))
     if profile_name:
         profile = profile_name.strip()
@@ -1753,6 +2787,12 @@ def _outlook_namespace(profile_name: str | None = None) -> Any:
                     "Outlook プロファイルにログオンできませんでした。\n"
                     f"profile_name={profile_name}"
                 ) from e
+    elif is_new_instance:
+        # 新規起動時: profile_name 未指定でもデフォルトプロファイルを確実に読み込む
+        try:
+            _com_retry(lambda: mapi.Logon("", "", False, True))
+        except Exception:
+            pass  # すでに Logon 済みの場合は無視
     return mapi
 
 
@@ -1769,18 +2809,19 @@ def _resolve_outlook_folder(mapi: Any, folder_path: str) -> Any:
 
     store_name = parts[0]
     store = None
-    folders = _com_retry(lambda: mapi.Folders)
-    count = _com_retry(lambda: int(folders.Count))
+    stores = _com_retry(lambda: mapi.Stores)
+    count = _com_retry(lambda: int(stores.Count))
     for i in range(1, count + 1):
-        f = _com_retry(lambda i=i: folders.Item(i))
-        if (f.Name or "").strip() == store_name:
-            store = f
+        s = _com_retry(lambda i=i: stores.Item(i))
+        display_name = (s.DisplayName or "").strip()
+        if display_name == store_name:
+            store = _com_retry(lambda s=s: s.GetRootFolder())
             break
     if store is None:
         available = []
         for i in range(1, count + 1):
             try:
-                available.append(str(_com_retry(lambda i=i: folders.Item(i).Name)))
+                available.append(str(_com_retry(lambda i=i: stores.Item(i).DisplayName)))
             except Exception:
                 continue
         raise ValueError(
@@ -2200,6 +3241,17 @@ def _print_via_shell(pdf_path: Path, printer_name: str | None) -> None:
     win32api.ShellExecute(0, verb, str(pdf_path), params, str(pdf_path.parent), 0)
 
 
+def _print_to_pdf_copy(pdf_path: Path, output_dir: Path) -> Path:
+    """
+    MVP print mode:
+    do not send to a physical printer; copy printable PDFs to output_dir.
+    """
+    _ensure_dir(output_dir)
+    dst = _unique_path(output_dir / _sanitize_filename(pdf_path.name))
+    shutil.copy2(pdf_path, dst)
+    return dst
+
+
 def _write_report_json(path: Path, report: RunReport) -> None:
     path.write_text(
         json.dumps(asdict(report), ensure_ascii=False, indent=2),
@@ -2220,16 +3272,181 @@ def _write_report_csv(path: Path, saved: Sequence[SavedAttachment]) -> None:
         "issue_date",
         "amount",
         "invoice_no",
+        "project",
         "sha256",
         "was_encrypted",
         "decrypted_path",
         "encrypted_original_path",
+        "route_subdir",
+        "route_reason",
+        "processing_status",
     ]
     with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         for r in saved:
             w.writerow(asdict(r))
+
+
+def _write_new_project_candidates_csv(path: Path, saved: Sequence[SavedAttachment]) -> bool:
+    rows = [r for r in saved if r.route_reason == "new_project_candidate"]
+    if not rows:
+        return False
+    fields = [
+        "message_subject",
+        "sender",
+        "received_time",
+        "attachment_name",
+        "vendor",
+        "issue_date",
+        "amount",
+        "project",
+        "saved_path",
+        "route_subdir",
+        "route_reason",
+        "processing_status",
+    ]
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: asdict(r).get(k) for k in fields})
+    return True
+
+
+def _route_and_move_file(
+    primary_path: Path,
+    dest_dir: Path,
+    final_name: str,
+    log_path: Path,
+    unresolved: list[str],
+    log_prefix: str = "rename/move",
+) -> Path:
+    _ensure_dir(dest_dir)
+    final_path = _unique_path(dest_dir / final_name)
+    _append_log(log_path, f"{log_prefix}: {primary_path.name} -> {final_path}")
+    try:
+        _move_file(primary_path, final_path)
+    except Exception:
+        unresolved.append(f"failed to move file: {primary_path.name} -> {final_path}")
+        final_path = primary_path
+    return final_path
+
+
+def _check_duplicate_attachment(
+    attachment_name: str,
+    sha: str,
+    processed_index: dict,
+    entry_id: str,
+    subject: str,
+    sender: str,
+    received_time_s: str,
+    pdf_path: Path,
+    save_dir: Path,
+    log_path: Path,
+) -> "SavedAttachment | None":
+    manifest_key = _processed_attachment_key(entry_id, attachment_name, sha)
+    existing_record = processed_index.get(manifest_key)
+    if not existing_record:
+        return None
+    existing_saved_path = str(existing_record.get("saved_path") or "").strip()
+    existing_route_reason = str(existing_record.get("route_reason") or "").strip()
+    existing_name = Path(existing_saved_path).name if existing_saved_path else ""
+    can_skip_duplicate = (
+        bool(existing_saved_path)
+        and Path(existing_saved_path).exists()
+        and _is_within_dir(Path(existing_saved_path), save_dir)
+        and not existing_name.startswith("要確認_")
+        and existing_route_reason not in {"fallback", "new_project_candidate"}
+    )
+    if not can_skip_duplicate:
+        return None
+    try:
+        if pdf_path.exists():
+            pdf_path.unlink()
+    except Exception:
+        pass
+    _append_log(
+        log_path,
+        f"[SKIP] duplicate attachment: {attachment_name} -> {existing_saved_path}",
+    )
+    return SavedAttachment(
+        message_entry_id=entry_id,
+        message_subject=subject,
+        sender=sender,
+        received_time=received_time_s,
+        attachment_name=attachment_name,
+        saved_path=existing_saved_path,
+        original_saved_path=str(pdf_path),
+        vendor=existing_record.get("vendor"),
+        issue_date=existing_record.get("issue_date"),
+        amount=existing_record.get("amount"),
+        invoice_no=existing_record.get("invoice_no"),
+        project=existing_record.get("project"),
+        sha256=sha,
+        was_encrypted=bool(existing_record.get("was_encrypted", False)),
+        decrypted_path=existing_record.get("decrypted_path"),
+        encrypted_original_path=existing_record.get("encrypted_original_path"),
+        route_subdir=existing_record.get("route_subdir"),
+        route_reason=existing_record.get("route_reason") or "idempotency_manifest",
+        processing_status="duplicate_skipped",
+    )
+
+
+def _decrypt_pdf_if_needed(
+    pdf_path: Path,
+    was_encrypted: bool,
+    cfg: "ToolConfig",
+    received_dt: datetime,
+    sender: str,
+    password_notes: "Sequence[PasswordNote]",
+    log_path: Path,
+    unresolved: list[str],
+    subject: str = "",
+) -> "tuple[Path, Path | None]":
+    if not was_encrypted:
+        return pdf_path, None
+    if not cfg.enable_pdf_decryption:
+        _append_log(
+            log_path,
+            f"[MVP-SKIP] encrypted pdf decryption is disabled: {pdf_path.name}",
+        )
+        return pdf_path, None
+    passwords = _candidate_passwords_with_fallback(
+        target_time=received_dt,
+        target_sender=sender,
+        notes=password_notes,
+        log_path=log_path,
+    )
+    if not passwords:
+        unresolved.append(
+            f"encrypted pdf password not found: {pdf_path.name} (subject={subject})"
+        )
+        return pdf_path, None
+    out_base = pdf_path.with_name(pdf_path.stem + "__decrypted.pdf")
+    decrypted_path: Path | None = None
+    for pw in passwords:
+        out = _unique_path(out_base)
+        try:
+            _append_log(log_path, f"decrypt pdf: {pdf_path.name} -> {out.name}")
+            _decrypt_pdf(pdf_path, out, pw)
+            decrypted_path = out
+            break
+        except Exception as e:
+            try:
+                out.unlink()
+            except Exception:
+                pass
+            _append_log(
+                log_path,
+                f"[WARN] decrypt failed (try next): {pdf_path.name} error={e}",
+            )
+    if decrypted_path is None:
+        unresolved.append(
+            f"failed to decrypt encrypted pdf: {pdf_path.name} (subject={subject})"
+        )
+        return pdf_path, None
+    return decrypted_path, decrypted_path
 
 
 def _process_saved_pdf_file(
@@ -2240,6 +3457,7 @@ def _process_saved_pdf_file(
     entry_id: str,
     subject: str,
     sender: str,
+    body_snippet: str = "",
     received_dt: datetime,
     received_time_s: str,
     password_notes: Sequence[PasswordNote],
@@ -2247,97 +3465,117 @@ def _process_saved_pdf_file(
     run_dir: Path,
     log_path: Path,
     unresolved: list[str],
+    processed_index: dict[str, dict[str, Any]],
+    processed_manifest_path: Path,
 ) -> SavedAttachment:
     sha = _sha256_file(pdf_path)
+    manifest_key = _processed_attachment_key(entry_id, attachment_name, sha)
+
+    duplicate = _check_duplicate_attachment(
+        attachment_name=attachment_name,
+        sha=sha,
+        processed_index=processed_index,
+        entry_id=entry_id,
+        subject=subject,
+        sender=sender,
+        received_time_s=received_time_s,
+        pdf_path=pdf_path,
+        save_dir=save_dir,
+        log_path=log_path,
+    )
+    if duplicate is not None:
+        return duplicate
 
     was_encrypted = _is_pdf_encrypted(pdf_path)
-    decrypted_path: Path | None = None
     encrypted_original_path: str | None = str(pdf_path) if was_encrypted else None
 
-    primary_path = pdf_path
-    if was_encrypted:
-        passwords = _candidate_passwords_with_fallback(
-            target_time=received_dt,
-            target_sender=sender,
-            notes=password_notes,
-            log_path=log_path,
-        )
-        if not passwords:
-            unresolved.append(
-                f"暗号化PDFのパスワードが見つかりません: {pdf_path.name} (subject={subject})"
-            )
-        else:
-            out_base = pdf_path.with_name(pdf_path.stem + "__decrypted.pdf")
-            ok = False
-            for pw in passwords:
-                out = _unique_path(out_base)
-                try:
-                    _append_log(log_path, f"decrypt pdf: {pdf_path.name} -> {out.name}")
-                    _decrypt_pdf(pdf_path, out, pw)
-                    decrypted_path = out
-                    primary_path = out
-                    ok = True
-                    break
-                except Exception as e:
-                    try:
-                        out.unlink()
-                    except Exception:
-                        pass
-                    # wrong password is common; avoid logging secrets
-                    _append_log(
-                        log_path,
-                        f"[WARN] decrypt failed (try next): {pdf_path.name} error={e}",
-                    )
-            if not ok:
-                unresolved.append(
-                    f"PDF復号に失敗しました（候補パスワードで開けない）: {pdf_path.name} (subject={subject})"
-                )
+    primary_path, decrypted_path = _decrypt_pdf_if_needed(
+        pdf_path=pdf_path,
+        was_encrypted=was_encrypted,
+        cfg=cfg,
+        received_dt=received_dt,
+        sender=sender,
+        password_notes=password_notes,
+        log_path=log_path,
+        unresolved=unresolved,
+        subject=subject,
+    )
 
     final_path = primary_path
     vendor: str | None = None
     issue_date: str | None = None
     amount: int | None = None
     invoice_no: str | None = None
+    project: str | None = None
+    route_subdir: str | None = None
+    route_reason: str | None = None
 
-    # Rename/move based on PDF values (source of truth).
-    if cfg.rename.enabled and (not was_encrypted or decrypted_path is not None):
+    partial_fields = _extract_partial_invoice_fields_from_filename(
+        attachment_name, cfg.rename.company_deny_regex
+    )
+    review_partial = partial_fields
+    review_reasons: tuple[str, ...] = ()
+    review_raw_ocr_text = ""
+
+    if cfg.rename.enabled:
         fields = None
-        extraction_source = "none"
 
-        # 1. Try filename-first extraction (if enabled)
+        # 1) filename-first (fast and stable)
         if cfg.rename.filename_first:
             fields = _extract_invoice_fields_from_filename(
                 attachment_name,
                 company_deny_regex=cfg.rename.company_deny_regex,
             )
             if fields is not None:
-                extraction_source = "filename"
                 _append_log(
                     log_path,
-                    f"[INFO] Extracted from filename: vendor={fields.vendor}, date={fields.issue_date}, amount={fields.amount}",
+                    f"[INFO] extracted from filename: vendor={fields.vendor}, date={fields.issue_date}, amount={fields.amount}",
                 )
 
-        # 2. Fallback to PDF extraction
-        if fields is None:
+        # 2) fallback to PDF text extraction (only when decrypt succeeded if encrypted)
+        can_read_pdf = (not was_encrypted) or (decrypted_path is not None)
+        if fields is None and can_read_pdf:
             fields = _extract_invoice_fields_from_pdf(
                 primary_path,
                 company_deny_regex=cfg.rename.company_deny_regex,
                 max_pages=cfg.rename.max_pages,
                 run_dir=run_dir,
                 log_path=log_path,
+                vision_ocr_enabled=cfg.routing.vision_ocr_enabled,
+                vision_ocr_provider=cfg.routing.vision_ocr_provider,
+                sender=sender,
+                subject=subject,
             )
             if fields is not None:
-                extraction_source = "pdf"
+                _append_log(
+                    log_path,
+                    f"[INFO] extracted from pdf: vendor={fields.vendor}, date={fields.issue_date}, amount={fields.amount}",
+                )
 
-        if fields is None:
-            unresolved.append(
-                f"PDFからリネーム用の値（会社名/日付/金額）を確定できません: {primary_path.name} (subject={subject})"
-            )
-        else:
+        if fields is not None:
+            fields = _apply_invoice_guardrails_with_sender(fields, sender=sender)
+            if fields.requires_manual:
+                review_reasons = tuple(fields.review_reasons)
+                if any(str(reason).startswith("non_invoice_signal:") for reason in review_reasons):
+                    review_partial = partial_fields
+                else:
+                    review_partial = _partial_from_extracted_fields(fields, partial_fields)
+                review_raw_ocr_text = fields.raw_ocr_text
+                _append_log(
+                    log_path,
+                    "[INFO] manual review guard: "
+                    f"source={fields.source or 'local'} vendor={fields.vendor} "
+                    f"category={fields.vendor_category or '-'} "
+                    f"reasons={','.join(fields.review_reasons) if fields.review_reasons else '-'}",
+                )
+                fields = None
+
+        if fields is not None:
             vendor = fields.vendor
             issue_date = fields.issue_date
             amount = fields.amount
             invoice_no = fields.invoice_no
+            project = fields.project
             values = {
                 "vendor": vendor,
                 "vendor_short": _vendor_short(vendor),
@@ -2345,33 +3583,132 @@ def _process_saved_pdf_file(
                 "amount": str(amount),
                 "amount_comma": f"{amount:,}",
                 "invoice_no": invoice_no or "",
+                "project": project or "",
             }
 
-            subdir = (
+            vendor_subdir = (
                 _sanitize_filename(_render_template(cfg.rename.vendor_subdir_template, values))
                 if cfg.rename.create_vendor_subdir
                 else ""
             )
-            filename = _sanitize_filename(_render_template(cfg.rename.file_name_template, values))
-            dest_dir = (save_dir / subdir) if subdir else save_dir
-            final_path = _unique_path(dest_dir / filename)
-            _append_log(log_path, f"rename/move: {primary_path.name} -> {final_path}")
-            try:
-                _move_file(primary_path, final_path)
-            except Exception:
-                unresolved.append(
-                    f"保存先への移動/リネームに失敗: {primary_path.name} -> {final_path}"
-                )
-                final_path = primary_path
-    elif not cfg.rename.enabled:
+            _full_text = " ".join(filter(None, [
+                subject,
+                attachment_name,
+                fields.raw_ocr_text if fields is not None else "",
+            ]))
+            route_subdir, route_reason = _determine_route_decision(
+                cfg=cfg,
+                save_dir=save_dir,
+                sender=sender,
+                attachment_name=attachment_name,
+                subject=subject,
+                project=project,
+                full_text=_full_text,
+            )
+            filename = _sanitize_filename(
+                _cleanup_rendered_filename(_render_template(cfg.rename.file_name_template, values))
+            )
+            dest_dir = save_dir
+            if route_subdir:
+                dest_dir = dest_dir / route_subdir
+            if vendor_subdir:
+                dest_dir = dest_dir / vendor_subdir
+            final_path = _route_and_move_file(
+                primary_path, dest_dir, filename, log_path, unresolved, log_prefix="rename/move"
+            )
+        else:
+            # MVP rule: keep automation moving, but mark for manual review.
+            vendor = review_partial.vendor
+            issue_date = review_partial.issue_date
+            amount = review_partial.amount
+            project = review_partial.project
+
+            _full_text = " ".join(filter(None, [
+                subject,
+                attachment_name,
+                review_raw_ocr_text,
+            ]))
+            route_subdir, route_reason = _determine_route_decision(
+                cfg=cfg,
+                save_dir=save_dir,
+                sender=sender,
+                attachment_name=attachment_name,
+                subject=subject,
+                project=project,
+                full_text=_full_text,
+            )
+            review_name = _build_review_filename(
+                received_dt=received_dt,
+                attachment_name=attachment_name,
+                partial=review_partial,
+                review_reasons=review_reasons,
+                route_reason=route_reason,
+            )
+            # Option C routing: if project keyword matched uniquely, route to
+            # {project_subdir}/要確認/ so the responsible PM finds it in their folder.
+            # Otherwise fall back to central 要確認/review_required/ (unassigned).
+            if route_subdir:
+                dest_dir = save_dir / route_subdir / "要確認"
+            else:
+                dest_dir = save_dir / "要確認" / "review_required"
+            final_path = _route_and_move_file(
+                primary_path, dest_dir, review_name, log_path, unresolved, log_prefix="review move"
+            )
+    else:
         # Rename disabled: move the raw attachment name into save_dir.
-        final_path = _unique_path(save_dir / primary_path.name)
-        _append_log(log_path, f"move (rename disabled): {primary_path.name} -> {final_path}")
-        try:
-            _move_file(primary_path, final_path)
-        except Exception:
-            unresolved.append(f"保存先への移動に失敗: {primary_path.name} -> {final_path}")
-            final_path = primary_path
+        _full_text = " ".join(filter(None, [
+            subject,
+            attachment_name,
+        ]))
+        route_subdir, route_reason = _determine_route_decision(
+            cfg=cfg,
+            save_dir=save_dir,
+            sender=sender,
+            attachment_name=attachment_name,
+            subject=subject,
+            project=None,
+            full_text=_full_text,
+        )
+        dest_dir = (save_dir / route_subdir) if route_subdir else save_dir
+        final_path = _route_and_move_file(
+            primary_path, dest_dir, primary_path.name, log_path, unresolved, log_prefix="move (rename disabled)"
+        )
+
+    # P0: routing_state for review_helper integration
+    _routing_state = "auto_final"
+    _review_reason_str: str | None = None
+    if final_path and final_path.name.startswith("要確認"):
+        _routing_state = "review_required"
+        _review_reason_str = ",".join(review_reasons) if review_reasons else None
+
+    if final_path.exists() and _is_within_dir(final_path, save_dir):
+        record = {
+            "key": manifest_key,
+            "message_entry_id": entry_id,
+            "attachment_name": attachment_name,
+            "saved_path": str(final_path),
+            "vendor": vendor,
+            "issue_date": issue_date,
+            "amount": amount,
+            "invoice_no": invoice_no,
+            "project": project,
+            "sha256": sha,
+            "was_encrypted": was_encrypted,
+            "decrypted_path": str(final_path) if (was_encrypted and decrypted_path is not None) else None,
+            "encrypted_original_path": encrypted_original_path,
+            "route_subdir": route_subdir,
+            "route_reason": route_reason,
+            # --- P0: review_helper integration ---
+            "sender": sender,
+            "subject": subject,
+            "body_snippet": body_snippet[:500] if body_snippet else None,
+            "routing_state": _routing_state,
+            "review_reason": _review_reason_str,
+            "resolved_by": None,
+            "resolved_at": None,
+        }
+        processed_index[manifest_key] = record
+        _append_processed_attachment_record(processed_manifest_path, record)
 
     return SavedAttachment(
         message_entry_id=entry_id,
@@ -2385,10 +3722,14 @@ def _process_saved_pdf_file(
         issue_date=issue_date,
         amount=amount,
         invoice_no=invoice_no,
+        project=project,
         sha256=sha,
         was_encrypted=was_encrypted,
         decrypted_path=str(final_path) if (was_encrypted and decrypted_path is not None) else None,
         encrypted_original_path=encrypted_original_path,
+        route_subdir=route_subdir,
+        route_reason=route_reason,
+        processing_status="saved",
     )
 
 
@@ -2401,6 +3742,77 @@ def _validate_mail_config(cfg: ToolConfig, dry_run: bool, scan_only: bool) -> No
         raise ValueError(
             "config.mail.success_to が空です（send_success=true のため通知先が必要です）。"
         )
+
+
+def _validate_runtime_preflight(
+    *,
+    cfg: ToolConfig,
+    folder_path: str,
+    save_dir: Path | None,
+    dry_run: bool,
+    do_print: bool,
+    log_path: Path,
+) -> None:
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if not folder_path.startswith("\\\\"):
+        errors.append(f"outlook folder path must start with \\\\: {folder_path}")
+    if cfg.outlook is None:
+        errors.append("config.outlook is not set")
+    if not dry_run and save_dir is None:
+        errors.append("save_dir is required in execute mode")
+    if cfg.routing.enabled and not cfg.routing.fallback_subdir:
+        warnings.append("routing.fallback_subdir is empty")
+
+    provider = str(cfg.routing.vision_ocr_provider or "").strip().lower()
+    if cfg.routing.vision_ocr_enabled:
+        env_requirements: dict[str, tuple[str, ...]] = {
+            "claude": ("ANTHROPIC_API_KEY",),
+            "openai": ("OPENAI_API_KEY",),
+            "gemini": ("GOOGLE_API_KEY or GEMINI_API_KEY",),
+            "azure_di": ("AZURE_DI_ENDPOINT", "AZURE_DI_KEY"),
+            "azure_di_gpt4o": ("AZURE_DI_ENDPOINT", "AZURE_DI_KEY"),
+            "hybrid_gpt4o": ("AZURE_DI_ENDPOINT", "AZURE_DI_KEY"),
+            "auto": ("at least one OCR provider API key",),
+        }
+        if provider not in env_requirements:
+            errors.append(f"unsupported vision_ocr_provider: {cfg.routing.vision_ocr_provider}")
+        elif provider == "auto":
+            provider_keys = (
+                os.environ.get("ANTHROPIC_API_KEY"),
+                os.environ.get("OPENAI_API_KEY"),
+                os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY"),
+                os.environ.get("AZURE_DI_KEY"),
+            )
+            if not any(provider_keys):
+                errors.append("vision_ocr_enabled=true but no OCR provider API key is set")
+        elif provider == "gemini":
+            if not (os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")):
+                errors.append("vision_ocr_provider=gemini requires GOOGLE_API_KEY or GEMINI_API_KEY")
+        else:
+            missing = [name for name in env_requirements[provider] if not os.environ.get(name)]
+            if missing:
+                errors.append(
+                    f"vision_ocr_provider={cfg.routing.vision_ocr_provider} requires env vars: {', '.join(missing)}"
+                )
+
+    if do_print:
+        if cfg.print.method not in ("shell", "pdf_copy"):
+            errors.append(f"unsupported print.method: {cfg.print.method}")
+        if cfg.print.method == "shell" and not (cfg.print.printer_name or _default_printer()):
+            errors.append("print requested but no printer_name/default printer is available")
+
+    for warning in warnings:
+        _append_log(log_path, f"[WARN] preflight: {warning}")
+    if errors:
+        raise ValueError("config preflight failed:\n- " + "\n- ".join(errors))
+    _append_log(
+        log_path,
+        "preflight ok: "
+        f"routing={cfg.routing.enabled} vision_ocr={cfg.routing.vision_ocr_enabled}/{cfg.routing.vision_ocr_provider} "
+        f"print={do_print}",
+    )
 
 
 def _send_success_mail(cfg: ToolConfig, report: RunReport, run_dir: Path, dry_run: bool) -> None:
@@ -2417,6 +3829,12 @@ def _send_success_mail(cfg: ToolConfig, report: RunReport, run_dir: Path, dry_ru
         if report.merged_pdf_path
         else "(なし)"
     )
+    new_project_candidates = [a for a in report.saved_attachments if a.route_reason == "new_project_candidate"]
+    new_project_candidates_html = (
+        html_link_to_path(Path(report.new_project_candidates_path))
+        if report.new_project_candidates_path
+        else "(なし)"
+    )
     paragraphs = [
         f"シナリオ12・13（受信メールPDF保存・一括印刷）が完了しました。",
         f"Run ID: {report.run_id}",
@@ -2425,6 +3843,8 @@ def _send_success_mail(cfg: ToolConfig, report: RunReport, run_dir: Path, dry_ru
         f"Outlookフォルダ: {report.outlook_folder_path or '(未指定)'}",
         f"保存PDF数: {len(report.saved_attachments)}",
         f"URLのみタスク数: {len(report.url_only_tasks)}",
+        f"新規案件候補: {len(new_project_candidates)}",
+        f"新規案件候補CSV: {new_project_candidates_html}",
         f"結合PDF: {merged_html}",
         f"印刷ジョブ: {len(report.printed_paths)}",
         f"レポート: {html_link_to_path(run_dir)}",
@@ -2444,18 +3864,23 @@ def _send_success_mail(cfg: ToolConfig, report: RunReport, run_dir: Path, dry_ru
         bullets.append(f"... 他{len(report.saved_attachments) - max_details}件")
     if report.url_only_tasks:
         bullets.append("URLのみメールが検知されています（ダウンロード工程が未実装/未設定の場合は停止対象）")
+    if new_project_candidates:
+        bullets.append("新規案件候補あり: VPN接続後に軽技確認 -> フォルダ作成/マスタ更新 -> 再実行")
 
     html_body = build_simple_html(
         title="【完了】シナリオ12・13 受信メールPDF保存・一括印刷",
         paragraphs=paragraphs,
         bullets=bullets or None,
     )
+    attachments = [run_dir / "report.csv", run_dir / "report.json"]
+    if report.new_project_candidates_path:
+        attachments.append(Path(report.new_project_candidates_path))
     send_outlook(
         OutlookEmail(
             to=cfg.mail.success_to,
             subject=f"【完了】受信メールPDF保存・一括印刷 Run={report.run_id}",
             html_body=html_body,
-            attachments=[run_dir / "report.csv", run_dir / "report.json"],
+            attachments=attachments,
         ),
         dry_run=dry_run,
     )
@@ -2530,9 +3955,151 @@ def _list_outlook_child_folders(mapi: Any, folder_path: str) -> list[str]:
     return names
 
 
+def _finalize_and_notify(
+    *,
+    cfg: ToolConfig,
+    run_id: str,
+    started_at: datetime,
+    run_dir: Path,
+    dry_run: bool,
+    mail_dry_run: bool,
+    log_path: Path,
+    unresolved: list,
+    scan_only: bool,
+    mail_enabled: bool,
+    saved_rows: list,
+    url_only_tasks: list,
+    merged_pdf_path: str | None,
+    printed_paths: list,
+    folder_path: str,
+    scanned: int,
+    save_dir: Path | None,
+) -> int:
+    finished_at = datetime.now()
+    report = RunReport(
+        run_id=run_id,
+        started_at=started_at.isoformat(timespec="seconds"),
+        finished_at=finished_at.isoformat(timespec="seconds"),
+        dry_run=dry_run,
+        save_dir=str(save_dir) if save_dir else None,
+        outlook_folder_path=folder_path,
+        scanned_messages=scanned,
+        saved_attachments=tuple(saved_rows),
+        url_only_tasks=tuple(url_only_tasks),
+        merged_pdf_path=merged_pdf_path,
+        printed_paths=tuple(printed_paths),
+        project_master_path=cfg.project_master_path,
+        new_project_candidates_path=None,
+        unresolved=tuple(unresolved),
+    )
+    new_project_candidates_path = run_dir / "new_project_candidates.csv"
+    if _write_new_project_candidates_csv(new_project_candidates_path, saved_rows):
+        report = RunReport(
+            run_id=report.run_id,
+            started_at=report.started_at,
+            finished_at=report.finished_at,
+            dry_run=report.dry_run,
+            save_dir=report.save_dir,
+            outlook_folder_path=report.outlook_folder_path,
+            scanned_messages=report.scanned_messages,
+            saved_attachments=report.saved_attachments,
+            url_only_tasks=report.url_only_tasks,
+            merged_pdf_path=report.merged_pdf_path,
+            printed_paths=report.printed_paths,
+            project_master_path=report.project_master_path,
+            new_project_candidates_path=str(new_project_candidates_path),
+            unresolved=report.unresolved,
+        )
+        _append_log(
+            log_path,
+            f"new project candidate report: {new_project_candidates_path}",
+        )
+    _write_report_json(run_dir / "report.json", report)
+    _write_report_csv(run_dir / "report.csv", saved_rows)
+
+    if unresolved:
+        _append_log(log_path, f"unresolved_count={len(unresolved)}")
+        if mail_enabled:
+            _send_error_mail(
+                cfg=cfg,
+                run_id=run_id,
+                run_dir=run_dir,
+                summary="未解決項目があるため処理を停止しました。",
+                details=unresolved,
+                dry_run=mail_dry_run,
+            )
+        return 2
+
+    if scan_only:
+        _append_log(log_path, "scan_only done")
+        return 0
+
+    if mail_enabled:
+        _send_success_mail(
+            cfg=cfg, report=report, run_dir=run_dir, dry_run=mail_dry_run
+        )
+    _append_log(log_path, "success")
+    return 0
+
+
+def _run_debug_extract_mode(args: Any, project_master_override: Path | None, ap: Any) -> int:
+    cfg = (
+        _load_config(Path(args.config), project_master_override=project_master_override)
+        if args.config
+        else ToolConfig(project_master_path=str(project_master_override) if project_master_override else None)
+    )
+    run_id = _now_run_id()
+    debug_run_dir = Path(cfg.artifact_dir) / f"debug_extract_{run_id}"
+    _ensure_dir(debug_run_dir)
+    log_path = debug_run_dir / "run.log"
+    _append_log(
+        log_path,
+        f"start debug_extract run_id={run_id} config={args.config or '(none)'}",
+    )
+
+    pdf_paths = _expand_pdf_paths_for_debug(args.debug_extract_pdf)
+    if not pdf_paths:
+        ap.error("--debug-extract-pdf: no PDFs found in given paths")
+
+    ok = 0
+    ng = 0
+    for pdf_path in pdf_paths:
+        try:
+            fields = _debug_extract_invoice_fields_from_pdf(
+                pdf_path,
+                company_deny_regex=cfg.rename.company_deny_regex,
+                max_pages=int(cfg.rename.max_pages),
+                debug_run_dir=debug_run_dir,
+                log_path=log_path,
+            )
+            if fields:
+                ok += 1
+                invoice_no = fields.invoice_no or ""
+                print(
+                    f"OK\t{pdf_path}\tvendor={fields.vendor}\tissue_date={fields.issue_date}\tamount={fields.amount}\tinvoice_no={invoice_no}"
+                )
+            else:
+                ng += 1
+                print(f"NG\t{pdf_path}")
+        except Exception as e:
+            ng += 1
+            _append_log(log_path, f"[ERROR] debug_extract failed: pdf={pdf_path} error={e}")
+            print(f"NG\t{pdf_path}\terror={e}")
+
+    print(f"summary: ok={ok} ng={ng} total={len(pdf_paths)}")
+    print(f"debug artifacts: {debug_run_dir}")
+    return 0 if ng == 0 else 2
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=str, required=False, help="JSON config path")
+    ap.add_argument(
+        "--project-master-path",
+        type=str,
+        default=None,
+        help="Override project_master path for this run only (xlsx/csv/tsv).",
+    )
     ap.add_argument(
         "--scan-only",
         action="store_true",
@@ -2605,7 +4172,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="Override config.save_dir (save destination directory)",
     )
+    ap.add_argument(
+        "--payment-month",
+        type=str,
+        required=False,
+        help="支払月サブフォルダ名（例: '2026.3末支払.RK'）。完成形をそのまま指定",
+    )
     args = ap.parse_args(list(argv) if argv is not None else None)
+    project_master_override = None
+    if args.project_master_path:
+        project_master_override = Path(args.project_master_path).expanduser()
+        if not project_master_override.exists():
+            ap.error(f"--project-master-path not found: {project_master_override}")
 
     if args.list_outlook_stores:
         mapi = _outlook_namespace(profile_name=args.outlook_profile)
@@ -2622,55 +4200,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.debug_extract_pdf:
-        cfg = _load_config(Path(args.config)) if args.config else ToolConfig()
-        run_id = _now_run_id()
-        debug_run_dir = Path(cfg.artifact_dir) / f"debug_extract_{run_id}"
-        _ensure_dir(debug_run_dir)
-        log_path = debug_run_dir / "run.log"
-        _append_log(
-            log_path,
-            f"start debug_extract run_id={run_id} config={args.config or '(none)'}",
-        )
-
-        pdf_paths = _expand_pdf_paths_for_debug(args.debug_extract_pdf)
-        if not pdf_paths:
-            ap.error("--debug-extract-pdf: no PDFs found in given paths")
-
-        ok = 0
-        ng = 0
-        for pdf_path in pdf_paths:
-            try:
-                fields = _debug_extract_invoice_fields_from_pdf(
-                    pdf_path,
-                    company_deny_regex=cfg.rename.company_deny_regex,
-                    max_pages=int(cfg.rename.max_pages),
-                    debug_run_dir=debug_run_dir,
-                    log_path=log_path,
-                )
-                if fields:
-                    ok += 1
-                    invoice_no = fields.invoice_no or ""
-                    print(
-                        f"OK\t{pdf_path}\tvendor={fields.vendor}\tissue_date={fields.issue_date}\tamount={fields.amount}\tinvoice_no={invoice_no}"
-                    )
-                else:
-                    ng += 1
-                    print(f"NG\t{pdf_path}")
-            except Exception as e:
-                ng += 1
-                _append_log(log_path, f"[ERROR] debug_extract failed: pdf={pdf_path} error={e}")
-                print(f"NG\t{pdf_path}\terror={e}")
-
-        print(f"summary: ok={ok} ng={ng} total={len(pdf_paths)}")
-        print(f"debug artifacts: {debug_run_dir}")
-        return 0 if ng == 0 else 2
+        return _run_debug_extract_mode(args, project_master_override, ap)
 
     if not args.config:
-        ap.error(
-            "--config is required unless using --list-outlook-stores/--list-outlook-folders/--debug-extract-pdf"
-        )
+        _script_dir = Path(__file__).resolve().parent
+        _env_path = _script_dir.parent / "config" / "env.txt"
+        if _env_path.exists():
+            _env = _env_path.read_text(encoding="utf-8").strip().upper()
+            if _env == "PROD":
+                args.config = str(_script_dir.parent / "config" / "tool_config_prod.json")
+            else:
+                args.config = str(_script_dir.parent / "config" / "tool_config_test.json")
+        else:
+            ap.error(
+                "--config is required unless using --list-outlook-stores/--list-outlook-folders/--debug-extract-pdf"
+            )
 
-    cfg = _load_config(Path(args.config))
+    cfg = _load_config(Path(args.config), project_master_override=project_master_override)
     scan_only = bool(args.scan_only)
     dry_run = True if scan_only else (bool(args.dry_run) or (not args.execute))
     mail_enabled = not scan_only
@@ -2684,6 +4230,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ensure_dir(run_dir)
     log_path = run_dir / "run.log"
     _append_log(log_path, f"start run_id={run_id} dry_run={dry_run} config={args.config}")
+    _append_log(
+        log_path,
+        f"project_master: {cfg.project_master_path or '(none)'} entries={len(cfg.project_master)}",
+    )
 
     started_at = datetime.now()
     merged_pdf_path: str | None = None
@@ -2698,6 +4248,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise ValueError("config.save_dir が未設定です（保存先フォルダを指定してください）。")
         else:
             save_dir = Path(effective_save_dir)
+            save_dir = _resolve_save_dir_with_fallback(
+                save_dir,
+                timeout_seconds=(2.0 if dry_run else 8.0),
+                log_path=log_path,
+            )
             # Existence check can hang on UNC paths; use timeout-based probing.
             if not dry_run:
                 exists = _test_path_with_timeout(save_dir, timeout_seconds=8.0)
@@ -2721,6 +4276,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                         _append_log(
                             log_path, f"[WARN] save_dir does not exist (dry-run): {save_dir}"
                         )
+
+        # --payment-month: append sub-folder to save_dir
+        if args.payment_month and save_dir is not None:
+            save_dir = save_dir / args.payment_month
+            _ensure_dir(save_dir)
+            _append_log(log_path, f"payment-month sub-folder: {save_dir}")
 
         if cfg.outlook is None:
             raise ValueError("config.outlook が未設定です。")
@@ -2746,6 +4307,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             _append_log(log_path, f"using outlook profile ({src}): {outlook_profile}")
         if args.outlook_folder_path:
             _append_log(log_path, f"using outlook folder_path (cli): {folder_path}")
+
+        _validate_runtime_preflight(
+            cfg=cfg,
+            folder_path=folder_path,
+            save_dir=save_dir,
+            dry_run=dry_run,
+            do_print=do_print,
+            log_path=log_path,
+        )
 
         mapi = _outlook_namespace(profile_name=outlook_profile)
         folder = _resolve_outlook_folder(mapi, folder_path)
@@ -2819,6 +4389,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         saved_rows: list[SavedAttachment] = []
         url_only_tasks: list[UrlOnlyTask] = []
+        processed_manifest_path = Path(cfg.artifact_dir) / PROCESSED_MANIFEST_NAME
+        processed_index = (
+            _load_processed_attachment_index(processed_manifest_path) if not dry_run else {}
+        )
+        if not dry_run:
+            _append_log(
+                log_path,
+                f"loaded processed manifest: {processed_manifest_path} records={len(processed_index)}",
+            )
 
         for it in candidates:
             try:
@@ -2836,6 +4415,35 @@ def main(argv: Sequence[str] | None = None) -> int:
                 entry_id = f"(no_entry_id:{rt_s})"
 
             unresolved_before_mail = len(unresolved)
+
+            def process_pdf(pdf_path: Path, att_name: str) -> SavedAttachment:
+                return _process_saved_pdf_file(
+                    cfg=cfg,
+                    pdf_path=pdf_path,
+                    attachment_name=att_name,
+                    entry_id=entry_id,
+                    subject=subject,
+                    sender=sender,
+                    body_snippet=body[:500] if body else "",
+                    received_dt=rt_dt,
+                    received_time_s=rt_s,
+                    password_notes=password_notes,
+                    save_dir=save_dir,
+                    run_dir=run_dir,
+                    log_path=log_path,
+                    unresolved=unresolved,
+                    processed_index=processed_index,
+                    processed_manifest_path=processed_manifest_path,
+                )
+
+            def add_url_task(urls_list: list[str]) -> None:
+                url_only_tasks.append(UrlOnlyTask(
+                    message_entry_id=entry_id,
+                    subject=subject,
+                    sender=sender,
+                    received_time=rt_s,
+                    urls=tuple(_mask_url(u) for u in urls_list),
+                ))
 
             # URL-only detection (body) for later; avoid logging sensitive bodies.
             try:
@@ -2855,15 +4463,34 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             if att_count <= 0:
                 if urls:
-                    url_only_tasks.append(
-                        UrlOnlyTask(
-                            message_entry_id=entry_id,
-                            subject=subject,
+                    web_pdfs: list[Path] = []
+                    if (
+                        _WEB_DOWNLOAD_AVAILABLE
+                        and cfg.enable_web_download
+                        and cfg.web_download
+                        and not scan_only
+                    ):
+                        web_dl_dir = run_dir / "web_downloads"
+                        web_pdfs_result = dispatch_web_download(
+                            cfg=cfg.web_download,
                             sender=sender,
-                            received_time=rt_s,
-                            urls=tuple(_mask_url(u) for u in urls),
+                            urls=list(urls),
+                            subject=subject,
+                            received_dt=rt_dt,
+                            download_dir=web_dl_dir,
+                            log_path=log_path,
+                            dry_run=dry_run,
+                            scan_only=scan_only,
                         )
-                    )
+                        web_pdfs = web_pdfs_result.pdfs
+                        for err_msg in web_pdfs_result.errors:
+                            unresolved.append(err_msg)
+                    if web_pdfs:
+                        for wp in web_pdfs:
+                            saved_rows.append(process_pdf(wp, wp.name))
+                            attachments_saved += 1
+                    else:
+                        add_url_task(urls)
                 continue
 
             for j in range(1, att_count + 1):
@@ -2876,6 +4503,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 is_pdf = att_name_l.endswith(".pdf")
                 is_zip = att_name_l.endswith(".zip")
                 if not (is_pdf or is_zip):
+                    continue
+                if is_zip and (not cfg.enable_zip_processing):
+                    _append_log(
+                        log_path,
+                        f"[MVP-SKIP] zip processing is disabled: {att_name}",
+                    )
                     continue
 
                 received_ymd = rt_dt.strftime("%Y%m%d")
@@ -2906,10 +4539,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                                 issue_date=None,
                                 amount=None,
                                 invoice_no=None,
+                                project=None,
                                 sha256="(dry-run)",
                                 was_encrypted=False,
                                 decrypted_path=None,
                                 encrypted_original_path=None,
+                                route_subdir=None,
+                                route_reason=None,
+                                processing_status="dry_run",
                             )
                         )
                         attachments_saved += 1
@@ -2926,23 +4563,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         log_path, f"save attachment(pdf): {att_name} -> {dest_path}"
                     )
                     att.SaveAsFile(str(dest_path))
-                    saved_rows.append(
-                        _process_saved_pdf_file(
-                            cfg=cfg,
-                            pdf_path=dest_path,
-                            attachment_name=att_name,
-                            entry_id=entry_id,
-                            subject=subject,
-                            sender=sender,
-                            received_dt=rt_dt,
-                            received_time_s=rt_s,
-                            password_notes=password_notes,
-                            save_dir=save_dir,
-                            run_dir=run_dir,
-                            log_path=log_path,
-                            unresolved=unresolved,
-                        )
-                    )
+                    saved_rows.append(process_pdf(dest_path, att_name))
                     attachments_saved += 1
                     continue
 
@@ -3009,35 +4630,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     except Exception:
                         rel = pdf_path.name
                     display_name = f"{att_name}::{rel}"
-                    saved_rows.append(
-                        _process_saved_pdf_file(
-                            cfg=cfg,
-                            pdf_path=pdf_path,
-                            attachment_name=display_name,
-                            entry_id=entry_id,
-                            subject=subject,
-                            sender=sender,
-                            received_dt=rt_dt,
-                            received_time_s=rt_s,
-                            password_notes=password_notes,
-                            save_dir=save_dir,
-                            run_dir=run_dir,
-                            log_path=log_path,
-                            unresolved=unresolved,
-                        )
-                    )
+                    saved_rows.append(process_pdf(pdf_path, display_name))
                     attachments_saved += 1
 
             if attachments_saved == 0 and urls:
-                url_only_tasks.append(
-                    UrlOnlyTask(
-                        message_entry_id=entry_id,
-                        subject=subject,
-                        sender=sender,
-                        received_time=rt_s,
-                        urls=tuple(_mask_url(u) for u in urls),
-                    )
-                )
+                add_url_task(urls)
 
             # Mimic the human workflow: reading/handling a mail marks it as processed.
             # This is intentionally best-effort to avoid blocking invoice collection.
@@ -3074,6 +4671,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         f"[WARN] failed to set flag: entry_id={entry_id} error={e}",
                     )
 
+        # Cleanup web browser sessions
+        if _WEB_DOWNLOAD_AVAILABLE and cfg.enable_web_download:
+            cleanup_web_sessions()
+
         # Merge/Print targets (prefer decrypted if exists). Skip existence checks in dry-run/scan.
         printable: list[Path] = []
         if not dry_run:
@@ -3090,62 +4691,52 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         # Print (jidoka: do not print in dry-run)
         if do_print and printable:
-            printer = cfg.print.printer_name or _default_printer()
-            if cfg.print.method != "shell":
-                raise ValueError(f"未対応のprint.methodです: {cfg.print.method}")
-
             targets = [Path(merged_pdf_path)] if merged_pdf_path else printable
-            for p in targets:
-                _append_log(log_path, f"print: {p} -> printer={printer or '(default)'}")
-                _print_via_shell(p, printer_name=printer)
-                printed_paths.append(str(p))
-                time.sleep(1.0)  # small gap to avoid overwhelming the print spooler
+            if cfg.print.method == "shell":
+                printer = cfg.print.printer_name or _default_printer()
+                for p in targets:
+                    _append_log(log_path, f"print: {p} -> printer={printer or '(default)'}")
+                    _print_via_shell(p, printer_name=printer)
+                    printed_paths.append(str(p))
+                    time.sleep(1.0)  # small gap to avoid overwhelming the print spooler
+            elif cfg.print.method == "pdf_copy":
+                out_dir = (
+                    Path(cfg.print.pdf_output_dir)
+                    if cfg.print.pdf_output_dir
+                    else (run_dir / "printed_pdf")
+                )
+                for p in targets:
+                    out_path = _print_to_pdf_copy(p, out_dir)
+                    _append_log(log_path, f"print(pdf_copy): {p} -> {out_path}")
+                    printed_paths.append(str(out_path))
+            else:
+                raise ValueError(f"unsupported print.method: {cfg.print.method}")
 
         # URL-only tasks are unresolved by default (unless fail_on_url_only_mail is false)
         if (not scan_only) and cfg.fail_on_url_only_mail and url_only_tasks:
-            unresolved.append(f"URLのみメールが{len(url_only_tasks)}件あります（Web請求の自動DL未対応/未設定）。")
-
-        finished_at = datetime.now()
-        report = RunReport(
-            run_id=run_id,
-            started_at=started_at.isoformat(timespec="seconds"),
-            finished_at=finished_at.isoformat(timespec="seconds"),
-            dry_run=dry_run,
-            save_dir=str(save_dir) if save_dir else None,
-            outlook_folder_path=folder_path,
-            scanned_messages=scanned,
-            saved_attachments=tuple(saved_rows),
-            url_only_tasks=tuple(url_only_tasks),
-            merged_pdf_path=merged_pdf_path,
-            printed_paths=tuple(printed_paths),
-            unresolved=tuple(unresolved),
-        )
-        _write_report_json(run_dir / "report.json", report)
-        _write_report_csv(run_dir / "report.csv", saved_rows)
-
-        if unresolved:
-            _append_log(log_path, f"unresolved_count={len(unresolved)}")
-            if mail_enabled:
-                _send_error_mail(
-                    cfg=cfg,
-                    run_id=run_id,
-                    run_dir=run_dir,
-                    summary="未解決項目があるため処理を停止しました。",
-                    details=unresolved,
-                    dry_run=mail_dry_run,
-                )
-            return 2
-
-        if scan_only:
-            _append_log(log_path, "scan_only done")
-            return 0
-
-        if mail_enabled:
-            _send_success_mail(
-                cfg=cfg, report=report, run_dir=run_dir, dry_run=mail_dry_run
+            unresolved.append(
+                f"URL-only mails detected: {len(url_only_tasks)} (web download is out of MVP scope)"
             )
-        _append_log(log_path, "success")
-        return 0
+
+        return _finalize_and_notify(
+            cfg=cfg,
+            run_id=run_id,
+            started_at=started_at,
+            run_dir=run_dir,
+            dry_run=dry_run,
+            mail_dry_run=mail_dry_run,
+            log_path=log_path,
+            unresolved=unresolved,
+            scan_only=scan_only,
+            mail_enabled=mail_enabled,
+            saved_rows=saved_rows,
+            url_only_tasks=url_only_tasks,
+            merged_pdf_path=merged_pdf_path,
+            printed_paths=printed_paths,
+            folder_path=folder_path,
+            scanned=scanned,
+            save_dir=save_dir,
+        )
 
     except Exception as e:
         tb = traceback.format_exc()

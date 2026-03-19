@@ -1,0 +1,17 @@
+{
+  "number_column": "工事番号",
+  "name_column": "工事名称",
+  "busho_column": "工事区分",
+  "keyword_columns": [
+    "顧客",
+    "現場住所1",
+    "現場住所2"
+  ],
+  "repair_values": [
+    "修繕",
+    "営繕"
+  ],
+  "new_values": [
+    "新築"
+  ]
+}

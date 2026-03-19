@@ -1,0 +1,710 @@
+{
+  "artifact_dir": "C:\\ProgramData\\RK10\\Robots\\12・13受信メールのPDFを保存・一括印刷\\artifacts",
+  "save_dir": "C:\\ProgramData\\RK10\\Robots\\12・13受信メールのPDFを保存・一括印刷\\RK.Mock\\saved",
+  "outlook": {
+    "profile_name": null,
+    "folder_path": "\\\\seikyu.tic@tokai-ic.co.jp\\受信トレイ\\202512",
+    "unread_only": false,
+    "max_messages": 20,
+    "received_within_days": null,
+    "subject_allow_regex": "(請求|請求書|invoice|パスワード|HENNGE|Web請求)",
+    "subject_deny_regex": null,
+    "mark_as_read_on_success": false,
+    "use_flag_status": false,
+    "mark_flag_on_success": false
+  },
+  "merge": {
+    "enabled": false,
+    "output_name": "merged.pdf"
+  },
+  "print": {
+    "enabled": true,
+    "method": "pdf_copy",
+    "printer_name": null,
+    "pdf_output_dir": "C:\\ProgramData\\RK10\\Robots\\12・13受信メールのPDFを保存・一括印刷\\RK.Mock\\printed_pdf"
+  },
+  "rename": {
+    "enabled": true,
+    "create_vendor_subdir": false,
+    "vendor_subdir_template": "{vendor_short}",
+    "file_name_template": "{vendor}_{issue_date}_{amount_comma}_{project}.pdf",
+    "company_deny_regex": "東海インプル建設株式会社",
+    "max_pages": 2,
+    "filename_first": true
+  },
+  "routing": {
+    "enabled": true,
+    "fallback_subdir": "その他",
+    "threshold": 2,
+    "tie_margin": 0.1,
+    "vision_ocr_enabled": true,
+    "vision_ocr_provider": "openai",
+    "rules": [
+      {
+        "subdir": "3329_モビテック新築",
+        "keywords": [
+          "モビテック",
+          "シン・テクニカルセンター",
+          "3329"
+        ]
+      },
+      {
+        "subdir": "3285_中村",
+        "keywords": [
+          "中村",
+          "中島三丁目",
+          "3285"
+        ]
+      },
+      {
+        "subdir": "営繕",
+        "keywords": [
+          "営繕",
+          "修繕",
+          "改装"
+        ]
+      },
+      {
+        "subdir": "一般経費",
+        "keywords": [
+          "一般経費",
+          "事務所",
+          "資材置場"
+        ]
+      }
+    ],
+    "sender_rules": [
+      {
+        "sender": "3gi.hase@gmail.com",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中島三丁目計画",
+          "中村区中島三丁目計画新築工事"
+        ]
+      },
+      {
+        "sender": "94004mushika-pg@polus.co.jp",
+        "subdir": "3333_松のや",
+        "keywords": [
+          "松のや・マイカリー食堂R安城店新築工事"
+        ]
+      },
+      {
+        "sender": "98573matsuki-dv@polus.co.jp",
+        "subdir": "3197_津田",
+        "keywords": [
+          "津田吉雄様邸 共同住宅"
+        ]
+      },
+      {
+        "sender": "a-sumi@noda-crane.co.jp",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中村区中島町三丁目計画新築工事"
+        ]
+      },
+      {
+        "sender": "a_sasaki@smile-tec.co.jp",
+        "subdir": "3286_相羽製作所",
+        "keywords": [
+          "相羽製作所"
+        ]
+      },
+      {
+        "sender": "daiken@sakan.info",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中島3丁目計画"
+        ]
+      },
+      {
+        "sender": "esuya_5001@yahoo.co.jp",
+        "subdir": "3329_モビテック新築",
+        "keywords": [
+          "モビテックシン・テクニカルセンター新築工事"
+        ]
+      },
+      {
+        "sender": "fujimoto@el-ex.co.jp",
+        "subdir": "3259_セイワ",
+        "keywords": [
+          "セイワ株式会社 腰壁補修工事"
+        ]
+      },
+      {
+        "sender": "fukama-hasegawa@katch.ne.jp",
+        "subdir": "3295_結家",
+        "keywords": [
+          "家族葬の結家"
+        ]
+      },
+      {
+        "sender": "fukuhara@o-technique.co.jp",
+        "subdir": "3329_モビテック新築",
+        "keywords": [
+          "モビテックシンテクニカルセンター新築工事"
+        ]
+      },
+      {
+        "sender": "h-itoumusasi@outlook.jp",
+        "subdir": "マシンプロ",
+        "keywords": [
+          "マシンプロ様工場新築補償工事"
+        ]
+      },
+      {
+        "sender": "h-kondo@tokai-ic.co.jp",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "haradajuken@cg7.so-net.ne.jp",
+        "subdir": "3295_結家",
+        "keywords": [
+          "結家刈谷稲葉"
+        ]
+      },
+      {
+        "sender": "hasiken@circus.ocn.ne.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "愛三工業豊田工場駐車場整備工事"
+        ]
+      },
+      {
+        "sender": "hasimoto1106@nifty.com",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "hironn@yk.commufa.jp",
+        "subdir": "3278_ASADA",
+        "keywords": [
+          "なみのゆらぎクロス見切り補修工事"
+        ]
+      },
+      {
+        "sender": "hirotoshi.wakita@gterior.co.jp",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "info1@takagiassou.com",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中村区中島三丁目計画新築工事"
+        ]
+      },
+      {
+        "sender": "info@r-coating.jp",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "ishibashi-setsubi@hotmail.com",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中島三丁目",
+          "中島三町目"
+        ]
+      },
+      {
+        "sender": "ishihara@arina-p.com",
+        "subdir": "3473_ローソン",
+        "keywords": []
+      },
+      {
+        "sender": "itohk2@rent.co.jp",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "iwata.maki@iwata-glass.co.jp",
+        "subdir": "3313_稲垣",
+        "keywords": [
+          "西尾市塩町稲垣様邸新築工事"
+        ]
+      },
+      {
+        "sender": "k-anraku@tokai-ic.co.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "小林クリエイト 事務本館屋上防水工事"
+        ]
+      },
+      {
+        "sender": "k-fukuoka@tokai-ic.co.jp",
+        "subdir": "マシンプロ",
+        "keywords": [
+          "マシンプロ"
+        ]
+      },
+      {
+        "sender": "k.y@yamajipt.com",
+        "subdir": "営繕",
+        "keywords": [
+          "原田商事ビル３F内部改修工事"
+        ]
+      },
+      {
+        "sender": "kawaguchi-kiso@outlook.jp",
+        "subdir": "愛三",
+        "keywords": [
+          "愛三工業"
+        ]
+      },
+      {
+        "sender": "keiri@fujiken24.com",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中村区中島町三丁目計画新築工事"
+        ]
+      },
+      {
+        "sender": "keiyaku@mainmark.co.jp",
+        "subdir": "マシンプロ",
+        "keywords": [
+          "マシンプロ様工場新築補修工事"
+        ]
+      },
+      {
+        "sender": "kiyomi-fg@par.odn.ne.jp",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "ko-ken@herb.ocn.ne.jp",
+        "subdir": "3295_結家",
+        "keywords": [
+          "家族葬の結家刈谷稲場"
+        ]
+      },
+      {
+        "sender": "kouyou_kensetsu_kogyou@ybb.ne.jp",
+        "subdir": "3197_津田",
+        "keywords": [
+          "冨田様邸共同住宅新築工事"
+        ]
+      },
+      {
+        "sender": "kubota.t@koyo-reform.co.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "コメダ幸心工場足場工事",
+          "たつみ麵店足場工事"
+        ]
+      },
+      {
+        "sender": "m-hayakawa@supomane.com",
+        "subdir": "3304_冨田",
+        "keywords": [
+          "めぐウィメンズクリニック様新築工事"
+        ]
+      },
+      {
+        "sender": "m-ichikawa@ansei.biz",
+        "subdir": "3286_相羽製作所",
+        "keywords": [
+          "相羽製作所"
+        ]
+      },
+      {
+        "sender": "m-koyanagi@intelgrow.co.jp",
+        "subdir": "3327_イズモ",
+        "keywords": [
+          "イズモ葬祭土橋店新築工事"
+        ]
+      },
+      {
+        "sender": "m_honda@smile-tec.co.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "朝日商事"
+        ]
+      },
+      {
+        "sender": "maehata@mk9055.com",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中村区中島三丁目計画新築工事"
+        ]
+      },
+      {
+        "sender": "mh13197@sala.jp",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "mhc1996@hikoken.jp",
+        "subdir": "3197_津田",
+        "keywords": [
+          "津田吉雄様邸共同住宅"
+        ]
+      },
+      {
+        "sender": "mi-aoki@kitakei.co.jp",
+        "subdir": "3313_稲垣",
+        "keywords": [
+          "西尾市塩町稲垣様邸新築工事"
+        ]
+      },
+      {
+        "sender": "ms822@katch.ne.jp",
+        "subdir": "3295_結家",
+        "keywords": [
+          "家族葬の結家西尾市一色町味浜改装工事"
+        ]
+      },
+      {
+        "sender": "nakamitsu@katch.ne.jp",
+        "subdir": "3313_稲垣",
+        "keywords": [
+          "西尾市稲垣様邸新築工事"
+        ]
+      },
+      {
+        "sender": "nikken-jim@katch.ne.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "矢野様担当工事"
+        ]
+      },
+      {
+        "sender": "orange@matsusue.jp",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "otuka@santomi.jp",
+        "subdir": "3287_大平鉄工",
+        "keywords": [
+          "大平鉄工"
+        ]
+      },
+      {
+        "sender": "ri.suzuki@sk-gr.co.jp",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "sachiyama@taninomiya.co.jp",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "shimizua1@nat-s.co.jp",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "sumiko@mizukou.co.jp",
+        "subdir": "3473_ローソン",
+        "keywords": []
+      },
+      {
+        "sender": "t-masuhara@tokai-ic.co.jp",
+        "subdir": "3278_ASADA",
+        "keywords": [
+          "ART_CLINIC_ASADA",
+          "CLINIC_ASADA"
+        ]
+      },
+      {
+        "sender": "t.morita@suzukisangyo.com",
+        "subdir": "営繕",
+        "keywords": [
+          "中島町"
+        ]
+      },
+      {
+        "sender": "tateguya-sashito@alpha.ocn.ne.jp",
+        "subdir": "3327_イズモ",
+        "keywords": []
+      },
+      {
+        "sender": "thirama@mitani-corp.co.jp",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中村区中島町三丁目新築"
+        ]
+      },
+      {
+        "sender": "to_endo@kictec.co.jp",
+        "subdir": "3285_中村",
+        "keywords": []
+      },
+      {
+        "sender": "ueda-t@ccrt.co.jp",
+        "subdir": "大洋産業",
+        "keywords": [
+          "大洋産業"
+        ]
+      },
+      {
+        "sender": "y-isoda@tokai-ic.co.jp",
+        "subdir": "3313_稲垣",
+        "keywords": [
+          "稲垣様邸新築工事",
+          "西尾市塩町稲垣様邸"
+        ]
+      },
+      {
+        "sender": "y-minamiwaki@tokai-ic.co.jp",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中村区中島"
+        ]
+      },
+      {
+        "sender": "y-mizuno@ishida-setsubi.com",
+        "subdir": "3295_結家",
+        "keywords": [
+          "家族葬の結家稲場新築工事"
+        ]
+      },
+      {
+        "sender": "y-nakagawa@uechi.co.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "小林クリエイト",
+          "ミカワ安城ヒルズ",
+          "おおはしこどもクリニック"
+        ]
+      },
+      {
+        "sender": "y-shinjo@tokai-ic.co.jp",
+        "subdir": "3295_結家",
+        "keywords": [
+          "家族葬結家刈谷稲場",
+          "家族葬の結家"
+        ]
+      },
+      {
+        "sender": "yichiya@mitani-corp.co.jp",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中村区中島三丁目"
+        ]
+      },
+      {
+        "sender": "ykojima@mitani-corp.co.jp",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中村区中島町三丁目新築"
+        ]
+      },
+      {
+        "sender": "yoshida@ys-d.net",
+        "subdir": "営繕",
+        "keywords": []
+      },
+      {
+        "sender": "yuka-ito@meigo.co.jp",
+        "subdir": "3313_稲垣",
+        "keywords": [
+          "稲垣様邸"
+        ]
+      },
+      {
+        "sender": "a.suenaga@aichi-labo.com",
+        "subdir": "一般経費",
+        "keywords": [
+          "株ジーピーセンター様新工場新築工事 請求書常傭改定2025.10"
+        ]
+      },
+      {
+        "sender": "fujihara@sefa.co.jp",
+        "subdir": "3473_ローソン",
+        "keywords": [
+          "ローソン三河安城本町店新築工事 請求書注文発注用改定2025.10"
+        ]
+      },
+      {
+        "sender": "hattori-r@yukari-expert.com",
+        "subdir": "3285_中村",
+        "keywords": [
+          "中村区中島3丁目計画工事"
+        ]
+      },
+      {
+        "sender": "info@ikemotosheet.com",
+        "subdir": "営繕",
+        "keywords": [
+          "上地木材 垂れ壁テント新設工事",
+          "小林クリエイト糸入り透明生地間仕切りシート新設工事",
+          "東海インプル建設",
+          "清耳鼻咽喉科"
+        ]
+      },
+      {
+        "sender": "info@minagase.com",
+        "subdir": "3295_結家",
+        "keywords": [
+          "家族葬の結家西尾一色町"
+        ]
+      },
+      {
+        "sender": "kkken-keiri@vega.ocn.ne.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "陽だまりの森クリニック外壁改修工事"
+        ]
+      },
+      {
+        "sender": "m-konno@ekinuura.co.jp",
+        "subdir": "ゆうじさん",
+        "keywords": [
+          "愛同工業"
+        ]
+      },
+      {
+        "sender": "m-nomura@ekinuura.co.jp",
+        "subdir": "3286_相羽製作所",
+        "keywords": [
+          "相場製作所"
+        ]
+      },
+      {
+        "sender": "samtec2016@outlook.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "カネヒデ様.愛三工業様",
+          "愛三工業様本社",
+          "愛三工業様本社.豊田.陽だまりの森クリニック様",
+          "愛三工業様豊田.タクマ食品様",
+          "愛三工業豊田 陽だまりの森クリニック 浅田LC"
+        ]
+      },
+      {
+        "sender": "tensho.kawara@nifty.com",
+        "subdir": "3295_結家",
+        "keywords": [
+          "家族葬の結家西尾市一色町味浜"
+        ]
+      },
+      {
+        "sender": "yamada_1@katch.ne.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "カネヒデクリーンルーム天井修繕工事",
+          "カネヒデ様クリーンルーム天井補強",
+          "コジマ本社トラックヤード穴補修工事",
+          "小林クリエイト角パイプ"
+        ]
+      },
+      {
+        "sender": "yoshimura@meisei-kenzai.co.jp",
+        "subdir": "3297_ジーピー",
+        "keywords": [
+          "ジーピーセンター様新工場造成外構工事"
+        ]
+      },
+      {
+        "sender": "KudakaS@rent.co.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "愛三工業本社5号館1F改修工事",
+          "ブックマーケット エーツー 内部改装工事",
+          "浅田レディースクリニック"
+        ]
+      },
+      {
+        "sender": "keecompanycoltd@gmail.com",
+        "subdir": "営繕",
+        "keywords": [
+          "樋口様邸",
+          "ハイツミユキ",
+          "南区戸建て",
+          "久野様邸"
+        ]
+      },
+      {
+        "sender": "tilt-kazuma@katch.ne.jp",
+        "subdir": "営繕",
+        "keywords": [
+          "赤坂印刷",
+          "おおはしこどもクリニック",
+          "小林クリエイトJ棟シート庇新設工事",
+          "小林クリエイト株第8工場雨樋修繕工事",
+          "若林西町倉庫各所修繕工事",
+          "西尾市稲垣様邸現場控え 1525700",
+          "西尾市稲垣様邸経理用 1525700"
+        ]
+      }
+    ],
+    "ban_senders": [
+      "h.ohki@shineisangyo.com",
+      "k-itoken@sk2.aitai.ne.jp",
+      "kamiya-sakan@kej.biglobe.ne.jp",
+      "miki-construction@room.ocn.ne.jp",
+      "shiro@4-star.jp",
+      "y-goto@komaki-tohken.com",
+      "y-nagasaki@tokai-ic.co.jp"
+    ]
+  },
+  "mail": {
+    "send_success": false,
+    "success_to": [],
+    "error_to": [
+      "kalimistk@gmail.com"
+    ],
+    "error_cc": []
+  },
+  "fail_on_url_only_mail": false,
+  "decrypt_password_window_minutes": 20,
+  "enable_zip_processing": false,
+  "enable_pdf_decryption": false,
+  "enable_web_download": false,
+  "web_download": {
+    "enabled": false,
+    "headless": false,
+    "download_timeout_ms": 30000,
+    "vendors": [
+      {
+        "handler_id": "rakuraku_meisai",
+        "target_name": "Kyowa_RakurakuMeisai",
+        "sender_pattern": "eco-serv\\.jp|rakurakumeisai",
+        "url_pattern": "rbmaple\\.eco-serv\\.jp/kyowa",
+        "options": {
+          "login_url": "https://rbmaple.eco-serv.jp/kyowa/mypage/"
+        }
+      },
+      {
+        "handler_id": "rakuraku_meisai",
+        "target_name": "Sugizaki_RakurakuMeisai",
+        "sender_pattern": "sugisakilease",
+        "url_pattern": "rbixora\\.eco-serv\\.jp/sugisakilease",
+        "options": {
+          "login_url": "https://rbixora.eco-serv.jp/sugisakilease/mypage/"
+        }
+      },
+      {
+        "handler_id": "btob_infomart",
+        "target_name": "BtoB_Infomart",
+        "sender_pattern": "infomart",
+        "url_pattern": "infomart\\.co\\.jp",
+        "options": {
+          "login_url": "https://www.infomart.co.jp/scripts/logon.asp"
+        }
+      },
+      {
+        "handler_id": "rakuraku_meisai",
+        "target_name": "Gterior_RakurakuMeisai",
+        "sender_pattern": "gterior\\.co\\.jp",
+        "url_pattern": "rbgourd\\.eco-serv\\.jp/gterior",
+        "options": {
+          "login_url": "https://rbgourd.eco-serv.jp/gterior/mypage/"
+        }
+      },
+      {
+        "handler_id": "daiohs_newfile",
+        "target_name": "Daiohs_Newfile",
+        "sender_pattern": "daiohs|newfile",
+        "url_pattern": "newfile\\.jp",
+        "options": {
+          "login_url": "https://newfile.jp/upfile/auth/login.html"
+        }
+      }
+    ]
+  }
+}

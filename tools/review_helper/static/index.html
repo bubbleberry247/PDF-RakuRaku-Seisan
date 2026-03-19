@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>請求書レビューヘルパー</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="header">
+    <h1>請求書レビューヘルパー</h1>
+    <div class="header-info">
+      <span id="queue-counter" class="badge">--/-- 残り</span>
+      <span id="payment-month" class="badge badge-info">--</span>
+    </div>
+  </header>
+
+  <main class="split-pane">
+    <!-- LEFT PANE: Form -->
+    <section class="form-pane">
+      <div class="queue-nav">
+        <button id="btn-prev" class="btn btn-sm" disabled>&lt; 前</button>
+        <span id="current-filename" class="filename-display">ファイル未選択</span>
+        <button id="btn-next" class="btn btn-sm">次 &gt;</button>
+      </div>
+
+      <div class="source-badge-row">
+        <span id="source-badge" class="badge badge-neutral">--</span>
+        <span id="ocr-status" class="badge badge-neutral">OCR: --</span>
+      </div>
+
+      <!-- Email context (from manifest) -->
+      <div class="field-group">
+        <label>差出人</label>
+        <div id="sender-display" class="readonly-field">--</div>
+      </div>
+      <div class="field-group">
+        <label>件名</label>
+        <div id="subject-display" class="readonly-field">--</div>
+      </div>
+
+      <hr>
+      <div class="section-label">リネーム情報（必須）</div>
+
+      <!-- Editable fields -->
+      <div class="field-group">
+        <label for="field-vendor">業者名 <span class="required">*</span></label>
+        <div id="vendor-candidates" class="candidate-list hidden"></div>
+        <input type="text" id="field-vendor" placeholder="業者名を入力...">
+      </div>
+
+      <div class="field-group">
+        <label for="field-project">工事名 <span class="required">*</span></label>
+        <div id="project-candidates" class="candidate-list hidden"></div>
+        <input type="text" id="field-project" placeholder="入力で候補表示..." autocomplete="off">
+        <div id="project-dropdown" class="dropdown hidden"></div>
+      </div>
+
+      <div class="field-group">
+        <label>工事番号</label>
+        <div id="field-kojiban" class="readonly-field">--</div>
+      </div>
+
+      <div class="field-group">
+        <label>保存先</label>
+        <div id="field-dest" class="readonly-field">--</div>
+      </div>
+
+      <div class="field-group">
+        <label>リネーム後ファイル名</label>
+        <div id="filename-preview" class="filename-preview">--</div>
+      </div>
+
+      <hr>
+      <div class="section-label">補足情報（任意）</div>
+
+      <div class="field-group">
+        <label for="field-date">取引日</label>
+        <input type="text" id="field-date" placeholder="YYYYMMDD">
+      </div>
+
+      <div class="field-group">
+        <label for="field-amount">金額</label>
+        <input type="text" id="field-amount" placeholder="数値">
+      </div>
+
+      <hr>
+
+      <div class="action-buttons">
+        <button id="btn-confirm" class="btn btn-primary" disabled>確定 (Enter)</button>
+        <button id="btn-skip" class="btn btn-secondary">スキップ (Esc)</button>
+        <button id="btn-exclude" class="btn btn-warning">非請求書</button>
+      </div>
+
+      <div class="timer-row">
+        <span id="timer">0:00</span>
+        <span id="last-action" class="muted"></span>
+      </div>
+    </section>
+
+    <!-- RIGHT PANE: PDF Preview -->
+    <section class="pdf-pane">
+      <div id="pdf-container">
+        <div id="pdf-placeholder" class="placeholder">
+          PDFを選択してください
+        </div>
+        <canvas id="pdf-canvas"></canvas>
+        <iframe id="pdf-iframe" style="display:none; width:100%; height:100%; border:none;"></iframe>
+      </div>
+      <div class="pdf-controls">
+        <button id="pdf-prev-page" class="btn btn-sm">&lt;</button>
+        <span id="pdf-page-info">-- / --</span>
+        <button id="pdf-next-page" class="btn btn-sm">&gt;</button>
+        <button id="pdf-zoom-in" class="btn btn-sm">+</button>
+        <button id="pdf-zoom-out" class="btn btn-sm">-</button>
+        <span class="pdf-ctrl-sep">|</span>
+        <button id="pdf-rotate-ccw" class="btn btn-sm" title="左90°回転">↺</button>
+        <button id="pdf-rotate-cw" class="btn btn-sm" title="右90°回転">↻</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>
