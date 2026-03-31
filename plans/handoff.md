@@ -13,6 +13,33 @@
 
 ---
 
+## 最新セッション (2026-03-31)
+
+### Done
+1. **AWSログイン復旧**: パスキーMFA使用不可 → 代替認証(メール+電話) → パスキー削除 → 1Password TOTP MFA再設定
+2. **自社土地アプリ修正** (http://54.238.230.57:8000/):
+   - 地図バグ: 404件のlat/lng欠損 → 国土地理院APIジオコーディング(401成功)
+   - テストデータ3件削除、全501件ピン表示、検索フィルタ連動
+   - トップマップ追加(全件ピン+現在位置デフォルト)、用途地域プルダウン修正
+3. **Ollama + GLM-OCR**: ollama 0.18.3 + glm-ocr:latest(2.2GB)インストール済み
+
+### Next (GPU PCで継続)
+- **GLM-OCR vs YomiToku 比較テスト**
+  - スクリプト: `C:\tmp\ocr_compare.py`
+  - テストPDF: `C:\ProgramData\RK10\Robots\44PDF一般経費楽楽精算申請\data\batch_preproc/`
+  - Intel Iris Xe PCでは600sタイムアウト → GPU必須
+  - GPU PCでも `ollama pull glm-ocr` が必要
+
+### 自社土地アプリ情報
+- **EC2**: `ssh -i <key.pem> ubuntu@54.238.230.57`
+- **SSH key**: `~/Downloads/LightsailDefaultKey-ap-northeast-1.pem`
+- **ソース**: `/home/ubuntu/apps/land_registry_v3/land_registry_rev2/`
+- **DB**: `permit_management_staging.db` (504→501件)
+- **サービス再起動**: `sudo systemctl restart land-registry`
+- **注意**: GitHubリポジトリなし(EC2上のみ)
+
+---
+
 ## Active Projects
 
 ### シナリオ55（振込Excel転記）
