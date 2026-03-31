@@ -1,0 +1,24 @@
+scenario: invoice
+description: "シナリオ12&13: 請求書"
+
+fields:
+  - name: vendor_name
+    type: company
+    required: true
+  - name: issue_date
+    type: date
+    required: true
+  - name: total_amount
+    type: amount
+    required: true
+    critical: true
+  - name: tax_amount
+    type: amount
+    required: false
+  - name: invoice_number
+    type: id
+    required: false
+
+validations:
+  - rule: "issue_date <= today"
+    severity: WARN

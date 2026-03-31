@@ -1,0 +1,30 @@
+scenario: permit
+description: "建設業許可証"
+
+fields:
+  - name: company_name
+    type: company
+    required: true
+  - name: permit_number
+    type: id
+    required: true
+  - name: permit_authority
+    type: text
+    required: true
+  - name: permit_category
+    type: text
+    required: true
+  - name: issue_date
+    type: date
+    required: false
+  - name: expiry_date
+    type: date
+    required: true
+    critical: true
+  - name: trade_categories
+    type: text
+    required: false
+
+validations:
+  - rule: "expiry_date <= today"
+    severity: WARN
