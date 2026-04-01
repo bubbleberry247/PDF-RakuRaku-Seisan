@@ -1,4 +1,4 @@
-# PDF OCR Skill（シナリオ44 精度向上版）
+# scenario44-OCR — シナリオ44 PDF OCR 精度向上版
 
 ## 目的
 シナリオ44（PDF一般経費楽楽精算申請）のOCR抽出精度を上げるために、実装へ反映すべき設定・改善手順・検証手順を統一する。
@@ -6,8 +6,8 @@
 このスキルは「説明だけ」で終わらせず、既存テンプレートコードへ実際に反映する前提で使う。
 
 ## 先に確認すること（必須）
-1. スキルファイルが存在すること  
-`C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\.claude\skills\pdf-ocr\SKILL.md`
+1. スキルファイルが存在すること
+`C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\.claude\skills\scenario44-OCR\SKILL.md`
 2. テンプレート実装が存在すること  
 `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\external-repos\my-claude-skills\pdf-ocr\templates\pdf_preprocess.py`  
 `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\external-repos\my-claude-skills\pdf-ocr\templates\pdf_ocr.py`

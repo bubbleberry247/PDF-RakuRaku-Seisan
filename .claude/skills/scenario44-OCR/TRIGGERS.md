@@ -1,4 +1,4 @@
-# PDF OCR Skill - トリガー定義
+# scenario44-OCR - トリガー定義
 
 ## 自動起動キーワード
 
@@ -44,14 +44,14 @@
 
 ```
 ユーザー: PDFからテキストを抽出したい
-→ pdf-ocr スキル起動
+→ scenario44-OCR スキル起動
 
 ユーザー: 請求書PDFの金額を読み取りたい
-→ pdf-ocr スキル起動
+→ scenario44-OCR スキル起動
 
 ユーザー: スキャンPDFの傾きを補正したい
-→ pdf-ocr スキル起動
+→ scenario44-OCR スキル起動
 
 ユーザー: OCRの精度を改善したい
-→ pdf-ocr スキル起動
+→ scenario44-OCR スキル起動
 ```

@@ -115,10 +115,10 @@ For every project, write a detailed FOR[yourname].md file that explains the whol
 
 ---
 
-### PDF OCRスキル
+### scenario44-OCR（シナリオ44 PDF OCR精度向上）
 
-**場所**: `.claude/skills/pdf-ocr/`
-**自動参照**: @.claude/skills/pdf-ocr/SKILL.md
+**場所**: `.claude/skills/scenario44-OCR/`
+**自動参照**: @.claude/skills/scenario44-OCR/SKILL.md
 
 **キーワード**: PDF、OCR、テキスト抽出、請求書、領収書、回転補正、傾き補正
 

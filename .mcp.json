@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "land-registry": {
+      "command": "python",
+      "args": ["tools/mcp-land-registry/server.py"],
+      "env": {
+        "LAND_REGISTRY_API": "http://54.238.230.57:8000/api/v1",
+        "LAND_REGISTRY_USER": "admin",
+        "MLIT_API_KEY": "04b062c964fb4d958607708d771c46c0"
+      }
+    }
+  }
+}
