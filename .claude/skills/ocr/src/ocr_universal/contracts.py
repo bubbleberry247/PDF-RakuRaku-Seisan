@@ -84,6 +84,7 @@ class ValidatedField:
     validation_message: str = ""
     evidence: str = ""
     page_no: int = 1
+    source: str = ""                  # "vision_first" | "vision_corrected_with_aux" | "unresolved"
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +102,10 @@ class PageContext:
     text_layer: str = ""              # from PyMuPDF (if available)
     has_text_layer: bool = False
     cjk_ratio: float = 0.0
+
+    # PaddleOCR auxiliary text
+    aux_ocr_text: str = ""            # PaddleOCR full text output
+    aux_ocr_available: bool = False   # whether PaddleOCR was run
 
     # Stage 2 output
     extracted_fields: list[ExtractedField] = field(default_factory=list)
@@ -140,6 +145,7 @@ class PipelineResult:
     total_api_cost_usd: float = 0.0
     total_tokens: int = 0
     errors: list[str] = field(default_factory=list)
+    paddle_mode: str = ""             # "always" | "fallback" | "off"
 
 
 # ---------------------------------------------------------------------------

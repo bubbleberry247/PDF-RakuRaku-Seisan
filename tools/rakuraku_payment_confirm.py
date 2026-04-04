@@ -21,7 +21,7 @@ import re
 import sys
 import time
 import traceback
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional, Sequence
@@ -34,6 +34,12 @@ from common.email_notifier import (
     build_simple_html,
     html_link_to_path,
     send_outlook,
+)
+from common.scenario70_config import (
+    DEFAULT_CONFIG_DIR,
+    get_env as get_scenario70_env,
+    load_config as load_scenario70_config,
+    split_mail_list,
 )
 
 try:
@@ -64,6 +70,14 @@ MAIL_CC_ERROR = ["kalimistk@gmail.com"]
 PAYMENT_SLIP_NO_RE = re.compile(r"\b\d{8}\b")
 DATE_RE = re.compile(r"\b\d{4}/\d{2}/\d{2}\b")
 YEN_AMOUNT_RE = re.compile(r"\b\d{1,3}(?:,\d{3})+\b")
+KNOWN_PAYMENT_METHODS = ("総合振込", "都度振込", "口座振替")
+RESULT_RANGE_RE = re.compile(r"(\d+)件中\s*(\d+)件.*?(\d+)件目")
+DISPLAY_COUNT_RE = re.compile(r"表示件数\s*(\d+)件")
+SELECTED_COUNT_RE = re.compile(r"(\d+)件中\s*(\d+)件\s*が選択されています")
+CREDENTIAL_TARGET_ALIASES = (
+    "RK10_RakurakuSeisan",
+    "楽楽精算",
+)
 
 
 def _normalize_payment_date(s: str) -> str:
@@ -114,11 +128,23 @@ def _parse_int_yen(s: str) -> int:
 
 @dataclass(frozen=True)
 class SlipRecord:
+    page_no: int
+    row_group_index: int
     slip_no: str
     request_date: str | None
     approval_date: str | None
     payment_date: str
+    payment_method: str | None
+    payment_method_source: str
     amount_yen: int | None
+    vendor: str | None
+    applicant: str | None
+    note: str | None
+    fee_burden: str | None
+    original_save: str | None
+    checkbox_name: str | None
+    decision: str
+    decision_reason: str
     raw_text: str
 
 
@@ -126,17 +152,57 @@ class SlipRecord:
 class RunResult:
     run_id: str
     started_at: str
+    env_name: str
     base_url: str
     department_code: str
     payment_date: str
     transfer_source: str
+    artifact_root: str
+    run_dir: str
     selected_records: int = 0
+    inventory_records: int = 0
     total_amount_yen: int | None = None
     payment_no: str | None = None
+    summary_path: str | None = None
+    report_json_path: str | None = None
     report_path: str | None = None
+    selected_report_path: str | None = None
+    anomaly_records: int = 0
+    anomaly_report_path: str | None = None
+    preflight_path: str | None = None
+    ledger_path: str | None = None
+    ledger_excerpt_path: str | None = None
     status: str = "started"  # started/success/failed/dry_run
     error: str | None = None
     ended_at: str | None = None
+
+
+@dataclass
+class SlipSelectionResult:
+    inventory: list[SlipRecord]
+    selected: list[SlipRecord]
+    anomalies: list[SlipRecord]
+
+
+@dataclass(frozen=True)
+class SearchResultSummary:
+    total_count: int
+    range_start: int
+    range_end: int
+    display_count: int | None
+
+
+@dataclass(frozen=True)
+class SelectedCountSummary:
+    total_count: int
+    selected_count: int
+
+
+def _detect_payment_method(text: str) -> str | None:
+    matches = [method for method in KNOWN_PAYMENT_METHODS if method in text]
+    if len(matches) == 1:
+        return matches[0]
+    return None
 
 
 def parse_slip_row_text(row_text: str, payment_date: str) -> SlipRecord:
@@ -161,15 +227,140 @@ def parse_slip_row_text(row_text: str, payment_date: str) -> SlipRecord:
         # In this screen, the per-slip amount is typically the only comma-number in the row.
         # Choose the last one to reduce risk of picking vendor codes earlier in the row.
         amount_yen = _parse_int_yen(amounts[-1])
+    payment_method = _detect_payment_method(text)
 
     return SlipRecord(
+        page_no=1,
+        row_group_index=1,
         slip_no=slip_no,
         request_date=request_date,
         approval_date=approval_date,
         payment_date=payment_date,
+        payment_method=payment_method,
+        payment_method_source="row_text" if payment_method else "unresolved",
         amount_yen=amount_yen,
+        vendor=None,
+        applicant=None,
+        note=None,
+        fee_burden=None,
+        original_save=None,
+        checkbox_name=None,
+        decision="unclassified",
+        decision_reason="fallback_row_text_parse",
         raw_text=text,
     )
+
+
+def _first_non_empty_line(text: str) -> str | None:
+    for line in text.splitlines():
+        value = line.strip()
+        if value:
+            return value
+    return None
+
+
+def _extract_original_save(text: str) -> str | None:
+    if "保存不要" in text:
+        return "保存不要"
+    if "保存要" in text:
+        return "保存要"
+    return None
+
+
+def _extract_fee_burden(text: str) -> str | None:
+    if "先方負担" in text:
+        return "先方負担"
+    if "当方負担" in text:
+        return "当方負担"
+    return None
+
+
+def _clean_note_text(text: str) -> str | None:
+    cleaned = text.replace("先方負担", "").replace("当方負担", "").strip()
+    return cleaned or None
+
+
+def _parse_result_summary_text(text: str) -> SearchResultSummary:
+    range_match = RESULT_RANGE_RE.search(text)
+    if not range_match:
+        raise RuntimeError("検索結果件数を画面から読み取れませんでした")
+    display_match = DISPLAY_COUNT_RE.search(text)
+    return SearchResultSummary(
+        total_count=int(range_match.group(1)),
+        range_start=int(range_match.group(2)),
+        range_end=int(range_match.group(3)),
+        display_count=int(display_match.group(1)) if display_match else None,
+    )
+
+
+def _parse_selected_count_text(text: str) -> SelectedCountSummary:
+    match = SELECTED_COUNT_RE.search(text)
+    if not match:
+        raise RuntimeError("選択件数表示を画面から読み取れませんでした")
+    return SelectedCountSummary(
+        total_count=int(match.group(1)),
+        selected_count=int(match.group(2)),
+    )
+
+
+def parse_slip_block_texts(
+    *,
+    row1_text: str,
+    row2_text: str,
+    row3_text: str,
+    checkbox_name: str | None,
+    page_no: int,
+    row_group_index: int,
+) -> SlipRecord:
+    row1_text = row1_text.strip()
+    row2_text = row2_text.strip()
+    row3_text = row3_text.strip()
+    raw_text = "\n".join([t for t in (row1_text, row2_text, row3_text) if t])
+    slip_match = PAYMENT_SLIP_NO_RE.search(row1_text or raw_text)
+    if not slip_match:
+        raise ValueError(f"伝票Noを抽出できません: {raw_text[:120]}")
+
+    dates = DATE_RE.findall(row1_text)
+    request_date = dates[0] if len(dates) >= 1 else None
+    approval_date = dates[1] if len(dates) >= 2 else None
+    requested_payment_date = dates[2] if len(dates) >= 3 else ""
+
+    amounts = YEN_AMOUNT_RE.findall(row1_text)
+    amount_yen = _parse_int_yen(amounts[-1]) if amounts else None
+    payment_method = _detect_payment_method(raw_text)
+    row1_lines = [line.strip() for line in row1_text.splitlines() if line.strip()]
+    applicant = row1_lines[1] if len(row1_lines) >= 2 else None
+
+    return SlipRecord(
+        page_no=page_no,
+        row_group_index=row_group_index,
+        slip_no=slip_match.group(0),
+        request_date=request_date,
+        approval_date=approval_date,
+        payment_date=requested_payment_date,
+        payment_method=payment_method,
+        payment_method_source="row_text" if payment_method else "unresolved",
+        amount_yen=amount_yen,
+        vendor=_first_non_empty_line(row2_text),
+        applicant=applicant,
+        note=_clean_note_text(row3_text),
+        fee_burden=_extract_fee_burden(row3_text),
+        original_save=_extract_original_save(row1_text),
+        checkbox_name=checkbox_name,
+        decision="unclassified",
+        decision_reason="unclassified",
+        raw_text=raw_text,
+    )
+
+
+def classify_slip_record(record: SlipRecord, payment_date: str) -> SlipRecord:
+    if record.payment_date != payment_date:
+        return replace(record, decision="skipped", decision_reason="payment_date_mismatch")
+    if not record.fee_burden:
+        return replace(record, decision="anomaly", decision_reason="missing_fee_burden")
+    if record.fee_burden != "当方負担":
+        return replace(record, decision="anomaly", decision_reason="non_company_fee_burden")
+    return replace(record, decision="selected", decision_reason="payment_date_match_and_company_fee")
 
 
 class RakurakuPaymentConfirmer:
@@ -194,10 +385,11 @@ class RakurakuPaymentConfirmer:
 
     def _get_credentials(self) -> tuple[str, str]:
         # 方法1: 統合資格情報
-        try:
-            return get_credential(self.credential_name)
-        except ValueError:
-            pass
+        for target_name in (self.credential_name, *CREDENTIAL_TARGET_ALIASES):
+            try:
+                return get_credential(target_name)
+            except ValueError:
+                pass
 
         # 方法2: 個別資格情報
         login_id = ""
@@ -291,17 +483,20 @@ class RakurakuPaymentConfirmer:
         self.page.goto(url, timeout=90_000)
         self.page.wait_for_load_state("domcontentloaded")
         time.sleep(2)
+        if "sapShihaShiharaiKakuteiKensaku" not in self.page.url:
+            raise RuntimeError(f"支払確定（支払先）画面に遷移できませんでした: {self.page.url}")
 
     def search_by_department(self, department_code: str) -> None:
         if not self.page:
             raise RuntimeError("page not started")
 
-        target: Page | Frame = self._get_main_frame() or self.page
-
-        # 所属部門入力（オートコンプリートがあるためTabで確定）
-        dept_input = target.locator(
-            "xpath=//*[normalize-space()='所属部門']/following::input[1]"
-        ).first
+        dept_input = self.page.locator("input[name='bumonCd']").first
+        if dept_input.count() == 0:
+            dept_input = self.page.locator("input[name='shozokuBumon']").first
+        if dept_input.count() == 0:
+            dept_input = self.page.locator(
+                "xpath=//*[normalize-space()='所属部門']/following::input[1]"
+            ).first
         dept_input.wait_for(state="visible", timeout=30_000)
         dept_input.fill(department_code)
         time.sleep(0.5)
@@ -311,101 +506,178 @@ class RakurakuPaymentConfirmer:
             pass
 
         # 検索
-        search_btn = target.locator("button:has-text('検索'), input[value='検索']").first
+        search_btn = self.page.locator("button:has-text('検索'), input[value='検索']").first
         search_btn.click()
-        time.sleep(2)
+        for _ in range(30):
+            time.sleep(1)
+            body_text = _read_text(self.page.locator("body").first)
+            if "検索条件に一致するデータは見つかりませんでした" in body_text:
+                raise RuntimeError("所属部門検索の結果が0件でした")
+            if self.page.locator("input[name^='kakutei(']").count() > 0:
+                return
+        raise RuntimeError("所属部門検索後の一覧表示を確認できませんでした")
 
-        # 一覧の「確定」ボタンが出るまで待機
-        confirm_btn = target.locator("button:has-text('確定'), input[value='確定']").first
-        confirm_btn.wait_for(state="visible", timeout=90_000)
-
-    def select_slips_by_payment_date(self, payment_date: str) -> list[SlipRecord]:
+    def read_result_summary(self) -> SearchResultSummary:
         if not self.page:
             raise RuntimeError("page not started")
+        return _parse_result_summary_text(_read_text(self.page.locator("body").first))
 
-        target: Page | Frame = self._get_main_frame() or self.page
+    def read_selected_count_summary(self) -> SelectedCountSummary:
+        if not self.page:
+            raise RuntimeError("page not started")
+        return _parse_selected_count_text(_read_text(self.page.locator("body").first))
 
-        # ヘッダが見えることを確認
-        target.locator("text=伝票No").first.wait_for(state="visible", timeout=60_000)
+    def iter_slip_blocks(self) -> list[tuple[Locator, Locator, Locator, Locator]]:
+        if not self.page:
+            raise RuntimeError("page not started")
+        blocks: list[tuple[Locator, Locator, Locator, Locator]] = []
+        for checkbox in self.page.locator("input[name^='kakutei(']").all():
+            row1 = checkbox.locator("xpath=ancestor::tr[1]").first
+            row2 = row1.locator("xpath=following-sibling::tr[1]").first
+            row3 = row1.locator("xpath=following-sibling::tr[2]").first
+            if row2.count() == 0 or row3.count() == 0:
+                raise RuntimeError("1伝票3行ブロックを特定できませんでした")
+            blocks.append((checkbox, row1, row2, row3))
+        return blocks
 
-        rows = target.locator("table tbody tr, table tr").all()
-        records: list[SlipRecord] = []
-        seen: set[str] = set()
+    def parse_slip_block(
+        self,
+        *,
+        checkbox: Locator,
+        row1: Locator,
+        row2: Locator,
+        row3: Locator,
+        page_no: int,
+        row_group_index: int,
+    ) -> SlipRecord:
+        checkbox_name = checkbox.get_attribute("name")
+        record = parse_slip_block_texts(
+            row1_text=_read_text(row1),
+            row2_text=_read_text(row2),
+            row3_text=_read_text(row3),
+            checkbox_name=checkbox_name,
+            page_no=page_no,
+            row_group_index=row_group_index,
+        )
+        fee_select = row3.locator("select[name^='tesuryoKbn(']").first
+        if fee_select.count() > 0:
+            fee_value = (fee_select.input_value() or "").strip()
+            fee_burden = {"0": "当方負担", "1": "先方負担"}.get(fee_value, fee_value or None)
+            if fee_burden:
+                record = replace(record, fee_burden=fee_burden)
+        return record
 
-        for row in rows:
-            try:
-                cb = row.locator("input[type='checkbox']")
-                if cb.count() == 0:
-                    continue
-                row_text = (row.text_content() or "").strip()
-                if payment_date not in row_text:
-                    continue
-                rec = parse_slip_row_text(row_text, payment_date)
-                if rec.slip_no in seen:
-                    continue
-                # Avoid selecting header checkbox etc.
-                cb_first = cb.first
-                if not cb_first.is_visible():
-                    continue
-                try:
-                    cb_first.scroll_into_view_if_needed()
-                    time.sleep(0.05)
-                except Exception:
-                    pass
-                try:
-                    cb_first.check()
-                except Exception:
-                    cb_first.click(force=True)
+    def select_slips_by_payment_date(self, payment_date: str) -> SlipSelectionResult:
+        if not self.page:
+            raise RuntimeError("page not started")
+        self.page.locator("text=伝票No").first.wait_for(state="visible", timeout=60_000)
+        summary = self.read_result_summary()
+        if summary.range_start != 1 or summary.range_end != summary.total_count:
+            raise RuntimeError(
+                f"複数ページまたは表示範囲不足を検知しました: {summary.range_start}-{summary.range_end}/{summary.total_count}"
+            )
 
-                records.append(rec)
-                seen.add(rec.slip_no)
-            except Exception:
-                continue
+        inventory: list[SlipRecord] = []
+        selected: list[SlipRecord] = []
+        anomalies: list[SlipRecord] = []
+        matching_count = 0
 
-        # Selected count text: "526件中 23件 が選択されています"
-        selected_info = ""
-        info_loc = target.locator(
-            "xpath=//*[contains(normalize-space(),'件が選択されています')]"
-        ).first
-        if info_loc.count() > 0:
-            selected_info = _read_text(info_loc)
-        m = re.search(r"(\d+)件\s*が選択されています", selected_info)
-        if m:
-            selected_count = int(m.group(1))
-            if selected_count != len(records):
-                raise RuntimeError(
-                    f"選択件数不一致: 画面表示={selected_count}, 抽出/選択={len(records)}. "
-                    f"支払日混在やDOM未取得の可能性。"
-                )
-        if len(records) == 0:
+        for row_group_index, (checkbox, row1, row2, row3) in enumerate(self.iter_slip_blocks(), start=1):
+            record = self.parse_slip_block(
+                checkbox=checkbox,
+                row1=row1,
+                row2=row2,
+                row3=row3,
+                page_no=1,
+                row_group_index=row_group_index,
+            )
+            classified = classify_slip_record(record, payment_date)
+            inventory.append(classified)
+            if classified.payment_date == payment_date:
+                matching_count += 1
+                if classified.decision == "selected":
+                    selected.append(classified)
+                elif classified.decision == "anomaly":
+                    anomalies.append(classified)
+
+        expected_count = summary.range_end - summary.range_start + 1
+        if len(inventory) != expected_count:
+            raise RuntimeError(
+                f"表示件数と抽出件数が一致しません: summary={expected_count}, parsed={len(inventory)}"
+            )
+        if matching_count == 0:
             raise RuntimeError(f"対象なし: (申請)支払日={payment_date} の行が見つかりません")
 
-        return records
+        return SlipSelectionResult(inventory=inventory, selected=selected, anomalies=anomalies)
 
-    def export_report(self, run_id: str, records: Sequence[SlipRecord]) -> Path:
+    def check_selected_slips(self, records: Sequence[SlipRecord]) -> None:
+        if not self.page:
+            raise RuntimeError("page not started")
+        for record in records:
+            if not record.checkbox_name:
+                raise RuntimeError(f"checkbox 名を取得できていません: {record.slip_no}")
+            checkbox = self.page.locator(f"input[name='{record.checkbox_name}']").first
+            checkbox.wait_for(state="visible", timeout=30_000)
+            checkbox.scroll_into_view_if_needed()
+            try:
+                checkbox.check()
+            except Exception:
+                checkbox.click(force=True)
+
+    def export_report(
+        self,
+        run_id: str,
+        records: Sequence[SlipRecord],
+        *,
+        kind: str = "selected",
+    ) -> Path:
         reports_dir = self.artifact_dir / "reports"
         _ensure_dir(reports_dir)
-        path = reports_dir / f"raku_payment_confirm_selected_{run_id}.csv"
+        path = reports_dir / f"raku_payment_confirm_{kind}_{run_id}.csv"
         with path.open("w", encoding="utf-8", newline="") as f:
             w = csv.writer(f)
             w.writerow(
                 [
+                    "page_no",
+                    "row_group_index",
                     "slip_no",
                     "request_date",
                     "approval_date",
-                    "payment_date",
+                    "requested_payment_date",
+                    "payment_method",
+                    "payment_method_source",
                     "amount_yen",
+                    "vendor",
+                    "applicant",
+                    "note",
+                    "fee_burden",
+                    "original_save",
+                    "checkbox_name",
+                    "decision",
+                    "decision_reason",
                     "raw_text",
                 ]
             )
             for r in records:
                 w.writerow(
                     [
+                        r.page_no,
+                        r.row_group_index,
                         r.slip_no,
                         r.request_date or "",
                         r.approval_date or "",
                         r.payment_date,
+                        r.payment_method or "",
+                        r.payment_method_source,
                         r.amount_yen if r.amount_yen is not None else "",
+                        r.vendor or "",
+                        r.applicant or "",
+                        r.note or "",
+                        r.fee_burden or "",
+                        r.original_save or "",
+                        r.checkbox_name or "",
+                        r.decision,
+                        r.decision_reason,
                         r.raw_text,
                     ]
                 )
@@ -414,9 +686,7 @@ class RakurakuPaymentConfirmer:
     def set_footer_conditions(self, transfer_source: str, payment_date: str) -> None:
         if not self.page:
             raise RuntimeError("page not started")
-        target: Page | Frame = self._get_main_frame() or self.page
-
-        footer = target.locator(
+        footer = self.page.locator(
             "xpath=//*[.//*[normalize-space()='振込元'] and .//*[normalize-space()='支払日'] and (.//button[normalize-space()='確定'] or .//input[@value='確定'])]"
         ).first
         footer.wait_for(state="visible", timeout=60_000)
@@ -444,8 +714,10 @@ class RakurakuPaymentConfirmer:
     def click_confirm(self) -> None:
         if not self.page:
             raise RuntimeError("page not started")
-        target: Page | Frame = self._get_main_frame() or self.page
-        btn = target.locator("button:has-text('確定'), input[value='確定']").first
+        selected_count = self.page.locator("input[name^='kakutei(']:checked").count()
+        if selected_count == 0:
+            raise RuntimeError("選択済み伝票が0件のため、確定処理へ進めません")
+        btn = self.page.locator("button:has-text('確定'), input[value='確定']").first
         btn.scroll_into_view_if_needed()
         time.sleep(0.2)
         btn.click()
@@ -461,7 +733,7 @@ class RakurakuPaymentConfirmer:
 
         def read_row(label: str) -> str:
             loc = modal.locator(
-                f"xpath=.//tr[.//*[normalize-space()='{label}']]//td"
+                f"xpath=.//tr[.//*[normalize-space()='{label}']]/*[self::td or self::th][last()]"
             ).first
             if loc.count() == 0:
                 return ""
@@ -567,6 +839,24 @@ def _load_jsonl(path: Path) -> list[dict]:
     return items
 
 
+def _prepare_run_dirs(artifact_root: Path, run_id: str) -> dict[str, Path]:
+    run_dir = artifact_root / f"run_{run_id}"
+    paths = {
+        "artifact_root": artifact_root,
+        "run_dir": run_dir,
+        "logs_dir": run_dir / "logs",
+        "reports_dir": run_dir / "reports",
+        "screenshots_dir": run_dir / "screenshots",
+    }
+    for path in paths.values():
+        _ensure_dir(path)
+    return paths
+
+
+def _write_preflight_json(path: Path, payload: dict) -> None:
+    _write_json(path, payload)
+
+
 def _make_run_key(payment_date: str, transfer_source: str, slip_nos: Sequence[str]) -> str:
     # Deterministic key for rerun-safety checks.
     slips = ",".join(sorted(set(slip_nos)))
@@ -575,33 +865,65 @@ def _make_run_key(payment_date: str, transfer_source: str, slip_nos: Sequence[st
 
 def run_payment_confirm(
     *,
+    env_name: str,
     base_url: str,
     department_code: str,
     payment_date: str,
     transfer_source: str,
-    artifact_dir: Path,
+    artifact_root: Path,
     execute: bool,
     headless: bool,
     dry_run_mail: bool,
 ) -> RunResult:
     run_id = _now_run_id()
+    artifact_root = artifact_root.resolve()
+    _ensure_dir(artifact_root)
+    run_paths = _prepare_run_dirs(artifact_root, run_id)
+    run_dir = run_paths["run_dir"]
+    result_json_path = run_paths["reports_dir"] / "report.json"
+    summary_json_path = run_dir / "summary.json"
+    preflight_path = run_dir / "reports" / "preflight.json"
+    ledger_path = artifact_root / "state" / "scenario70" / env_name.upper() / "ledger.jsonl"
+    ledger_excerpt_path = run_paths["logs_dir"] / "ledger_excerpt.jsonl"
+    _ensure_dir(ledger_path.parent)
+
     result = RunResult(
         run_id=run_id,
         started_at=datetime.now().isoformat(timespec="seconds"),
+        env_name=env_name.upper(),
         base_url=base_url,
         department_code=department_code,
         payment_date=payment_date,
         transfer_source=transfer_source,
+        artifact_root=str(artifact_root),
+        run_dir=str(run_dir),
+        summary_path=str(summary_json_path),
+        report_json_path=str(result_json_path),
+        preflight_path=str(preflight_path),
+        ledger_path=str(ledger_path),
+        ledger_excerpt_path=str(ledger_excerpt_path),
     )
 
-    artifact_dir = artifact_dir.resolve()
-    _ensure_dir(artifact_dir)
-    result_json_path = artifact_dir / "logs" / f"run_{run_id}.json"
-    ledger_path = artifact_dir / "logs" / "ledger.jsonl"
+    _write_preflight_json(
+        preflight_path,
+        {
+            "run_id": run_id,
+            "env_name": env_name.upper(),
+            "base_url": base_url,
+            "department_code": department_code,
+            "payment_date": payment_date,
+            "transfer_source": transfer_source,
+            "artifact_root": str(artifact_root),
+            "execute": execute,
+            "headless": headless,
+            "dry_run_mail": dry_run_mail,
+            "checked_at": datetime.now().isoformat(timespec="seconds"),
+        },
+    )
 
     confirmer = RakurakuPaymentConfirmer(
         base_url=base_url,
-        artifact_dir=artifact_dir,
+        artifact_dir=run_dir,
         headless=headless,
     )
 
@@ -618,14 +940,25 @@ def run_payment_confirm(
         confirmer.search_by_department(department_code)
         screenshot_paths.append(confirmer.screenshot(f"{run_id}_list_screen.png"))
 
-        records = confirmer.select_slips_by_payment_date(payment_date)
+        selection = confirmer.select_slips_by_payment_date(payment_date)
+        inventory = selection.inventory
+        records = selection.selected
+        anomalies = selection.anomalies
+        result.inventory_records = len(inventory)
         result.selected_records = len(records)
+        result.anomaly_records = len(anomalies)
 
         # Export report before any irreversible action.
-        report_path = confirmer.export_report(run_id, records)
+        report_path = confirmer.export_report(run_id, inventory, kind="full_inventory")
         result.report_path = str(report_path)
+        if records:
+            selected_report_path = confirmer.export_report(run_id, records, kind="selected_candidates")
+            result.selected_report_path = str(selected_report_path)
+        if anomalies:
+            anomaly_report_path = confirmer.export_report(run_id, anomalies, kind="anomalies")
+            result.anomaly_report_path = str(anomaly_report_path)
 
-        screenshot_paths.append(confirmer.screenshot(f"{run_id}_selected.png"))
+        screenshot_paths.append(confirmer.screenshot(f"{run_id}_inventory.png"))
 
         # Rerun safety: if same exact selection was already confirmed, stop.
         run_key = _make_run_key(payment_date, transfer_source, [r.slip_no for r in records])
@@ -634,6 +967,58 @@ def run_payment_confirm(
                 raise RuntimeError(
                     "リラン安全: 同一の伝票セットで支払確定済みの実行履歴があります。"
                 )
+
+        if not execute:
+            result.status = "dry_run"
+            result.ended_at = datetime.now().isoformat(timespec="seconds")
+            report_payload = {
+                **asdict(result),
+                "selected_slip_nos": [r.slip_no for r in records],
+                "anomaly_slip_nos": [r.slip_no for r in anomalies],
+                "screenshot_paths": [str(p) for p in screenshot_paths],
+            }
+            _write_json(result_json_path, report_payload)
+            _write_json(summary_json_path, asdict(result))
+            ledger_entry = {
+                "schema_version": 1,
+                "environment": env_name.upper(),
+                "run_id": run_id,
+                "run_key": run_key,
+                "status": "dry_run",
+                "inventory_records": result.inventory_records,
+                "selected_records": result.selected_records,
+                "anomaly_records": result.anomaly_records,
+                "at": datetime.now().isoformat(timespec="seconds"),
+            }
+            _append_jsonl(ledger_path, ledger_entry)
+            _append_jsonl(ledger_excerpt_path, ledger_entry)
+            return result
+
+        if anomalies:
+            raise RuntimeError(
+                "確認ゲート: 自動実行対象外の異常候補が "
+                f"{len(anomalies)}件あります。"
+                f"異常候補CSVを確認してから再実行してください: {result.anomaly_report_path}"
+            )
+        if len(records) == 0:
+            raise RuntimeError("確認ゲート: 自動選択候補が0件のため execute は実行しません")
+
+        confirmer.check_selected_slips(records)
+        screenshot_paths.append(confirmer.screenshot(f"{run_id}_selected.png"))
+
+        selected_summary = confirmer.read_selected_count_summary()
+        if selected_summary.selected_count != len(records):
+            raise RuntimeError(
+                "選択件数不一致: "
+                f"UI={selected_summary.selected_count}件, "
+                f"RPA={len(records)}件"
+            )
+        if selected_summary.total_count != result.inventory_records:
+            raise RuntimeError(
+                "総件数不一致: "
+                f"UI={selected_summary.total_count}件, "
+                f"RPA={result.inventory_records}件"
+            )
 
         confirmer.set_footer_conditions(transfer_source, payment_date)
         screenshot_paths.append(confirmer.screenshot(f"{run_id}_footer_set.png"))
@@ -656,24 +1041,16 @@ def run_payment_confirm(
                 f"確認ダイアログ不一致: 支払日 expected='{payment_date}' actual='{modal_date}'"
             )
 
+        expected_total_amount = sum(r.amount_yen or 0 for r in records)
         total_amount_raw = (modal_info.get("total_amount_raw") or "").strip()
-        if total_amount_raw:
-            result.total_amount_yen = _parse_int_yen(total_amount_raw)
-
-        if not execute:
-            result.status = "dry_run"
-            # Do not click OK.
-            _write_json(result_json_path, asdict(result))
-            _append_jsonl(
-                ledger_path,
-                {
-                    "run_id": run_id,
-                    "run_key": run_key,
-                    "status": "dry_run",
-                    "at": datetime.now().isoformat(timespec="seconds"),
-                },
+        if not total_amount_raw:
+            raise RuntimeError("確認ダイアログから支払額の合計を取得できません")
+        result.total_amount_yen = _parse_int_yen(total_amount_raw)
+        if result.total_amount_yen != expected_total_amount:
+            raise RuntimeError(
+                "確認ダイアログ不一致: "
+                f"支払額の合計 expected='{expected_total_amount}' actual='{result.total_amount_yen}'"
             )
-            return result
 
         confirmer.click_modal_ok(modal)
 
@@ -695,20 +1072,28 @@ def run_payment_confirm(
 
         result.status = "success"
         result.ended_at = datetime.now().isoformat(timespec="seconds")
-        _write_json(result_json_path, asdict(result))
-        _append_jsonl(
-            ledger_path,
-            {
-                "run_id": run_id,
-                "run_key": run_key,
-                "status": "success",
-                "payment_no": result.payment_no,
-                "total_amount_yen": result.total_amount_yen,
-                "selected_records": result.selected_records,
-                "at": result.ended_at,
-                "report_path": result.report_path,
-            },
-        )
+        report_payload = {
+            **asdict(result),
+            "selected_slip_nos": [r.slip_no for r in records],
+            "anomaly_slip_nos": [r.slip_no for r in anomalies],
+            "screenshot_paths": [str(p) for p in screenshot_paths],
+        }
+        _write_json(result_json_path, report_payload)
+        _write_json(summary_json_path, asdict(result))
+        ledger_entry = {
+            "schema_version": 1,
+            "environment": env_name.upper(),
+            "run_id": run_id,
+            "run_key": run_key,
+            "status": "success",
+            "payment_no": result.payment_no,
+            "total_amount_yen": result.total_amount_yen,
+            "selected_records": result.selected_records,
+            "at": result.ended_at,
+            "report_path": result.report_path,
+        }
+        _append_jsonl(ledger_path, ledger_entry)
+        _append_jsonl(ledger_excerpt_path, ledger_entry)
 
         return result
 
@@ -721,16 +1106,22 @@ def run_payment_confirm(
                 screenshot_paths.append(confirmer.screenshot(f"{run_id}_error.png"))
         except Exception:
             pass
-        _write_json(result_json_path, asdict(result))
-        _append_jsonl(
-            ledger_path,
-            {
-                "run_id": run_id,
-                "status": "failed",
-                "error": result.error,
-                "at": result.ended_at,
-            },
-        )
+        report_payload = {
+            **asdict(result),
+            "screenshot_paths": [str(p) for p in screenshot_paths],
+        }
+        _write_json(result_json_path, report_payload)
+        _write_json(summary_json_path, asdict(result))
+        ledger_entry = {
+            "schema_version": 1,
+            "environment": env_name.upper(),
+            "run_id": run_id,
+            "status": "failed",
+            "error": result.error,
+            "at": result.ended_at,
+        }
+        _append_jsonl(ledger_path, ledger_entry)
+        _append_jsonl(ledger_excerpt_path, ledger_entry)
         raise
 
     finally:
@@ -748,6 +1139,54 @@ def send_result_email(
     dry_run_mail: bool,
 ) -> None:
     if result.status == "dry_run":
+        if result.anomaly_records <= 0:
+            return
+
+        subject = (
+            f"[scenario70] dry-run anomaly detected "
+            f"{result.payment_date} {result.transfer_source}"
+        )
+        paragraphs = [
+            f"run_id: {result.run_id}",
+            f"payment_date: {result.payment_date}",
+            f"department_code: {result.department_code}",
+            f"transfer_source: {result.transfer_source}",
+            f"inventory_records: {result.inventory_records}",
+            f"selected_records: {result.selected_records}",
+            f"anomaly_records: {result.anomaly_records}",
+            "dry-run detected anomalies before confirmation. "
+            "Please review the anomaly CSV and correct Rakuraku data before rerun.",
+        ]
+        if result.report_path:
+            paragraphs.append(
+                f"full_inventory: {html_link_to_path(Path(result.report_path), label=result.report_path)}"
+            )
+        if result.selected_report_path:
+            paragraphs.append(
+                "selected_candidates: "
+                f"{html_link_to_path(Path(result.selected_report_path), label=result.selected_report_path)}"
+            )
+        if result.anomaly_report_path:
+            paragraphs.append(
+                f"anomaly_csv: {html_link_to_path(Path(result.anomaly_report_path), label=result.anomaly_report_path)}"
+            )
+        if screenshot_paths:
+            paragraphs.append("screenshots:")
+            paragraphs.append("<pre>" + "\n".join([str(p) for p in screenshot_paths]) + "</pre>")
+
+        html = build_simple_html(
+            title="scenario70 dry-run anomaly detected",
+            paragraphs=paragraphs,
+        )
+        send_outlook(
+            OutlookEmail(
+                to=MAIL_TO_ERROR,
+                cc=MAIL_CC_ERROR,
+                subject=subject,
+                html_body=html,
+            ),
+            dry_run=dry_run_mail,
+        )
         return
 
     if result.status == "success":
@@ -774,8 +1213,20 @@ def send_result_email(
                 f"支払額合計: {result.total_amount_yen:,}円"
                 if result.total_amount_yen is not None
                 else "支払額合計: (取得失敗)",
+                f"inventory件数: {result.inventory_records}",
                 f"選択件数: {result.selected_records}",
+                f"異常候補件数: {result.anomaly_records}",
                 f"レポート: {report_link}" if report_link else "レポート: (未出力)",
+                (
+                    f"選択候補CSV: {html_link_to_path(Path(result.selected_report_path), label=result.selected_report_path)}"
+                    if result.selected_report_path
+                    else "選択候補CSV: なし"
+                ),
+                (
+                    f"異常候補CSV: {html_link_to_path(Path(result.anomaly_report_path), label=result.anomaly_report_path)}"
+                    if result.anomaly_report_path
+                    else "異常候補CSV: なし"
+                ),
             ],
             bullets=bullets or None,
         )
@@ -802,6 +1253,14 @@ def send_result_email(
     ]
     if result.report_path:
         paragraphs.append(f"レポート: {html_link_to_path(Path(result.report_path), label=result.report_path)}")
+    if result.selected_report_path:
+        paragraphs.append(
+            f"選択候補CSV: {html_link_to_path(Path(result.selected_report_path), label=result.selected_report_path)}"
+        )
+    if result.anomaly_report_path:
+        paragraphs.append(
+            f"異常候補CSV: {html_link_to_path(Path(result.anomaly_report_path), label=result.anomaly_report_path)}"
+        )
     if screenshot_paths:
         paragraphs.append("スクショ:")
         paragraphs.append("<pre>" + "\n".join([str(p) for p in screenshot_paths]) + "</pre>")
@@ -823,11 +1282,13 @@ def send_result_email(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="楽楽精算 支払確定（支払先） 自動化（Scenario 70）")
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help="楽楽精算URL")
-    parser.add_argument("--department-code", default=DEFAULT_DEPARTMENT_CODE, help="所属部門コード（例: 300）")
+    parser.add_argument("--env", default=None, help="LOCAL or PROD")
+    parser.add_argument("--config-dir", default=str(DEFAULT_CONFIG_DIR), help="scenario70 config directory")
+    parser.add_argument("--base-url", default=None, help="楽楽精算URL")
+    parser.add_argument("--department-code", default=None, help="所属部門コード（例: 300）")
     parser.add_argument("--payment-date", required=True, help="対象の(申請)支払日（YYYY/MM/DD）")
-    parser.add_argument("--transfer-source", default=DEFAULT_TRANSFER_SOURCE, help="振込元（ドロップダウン表示名）")
-    parser.add_argument("--artifact-dir", default=DEFAULT_ARTIFACT_DIR, help="成果物出力先ディレクトリ（フルパス）")
+    parser.add_argument("--transfer-source", default=None, help="振込元（ドロップダウン表示名）")
+    parser.add_argument("--artifact-dir", default=None, help="成果物出力先ディレクトリ（フルパス）")
     parser.add_argument("--headless", action="store_true", help="ヘッドレス（非推奨）")
     parser.add_argument("--execute", action="store_true", help="確認ダイアログのOKを押して支払確定まで実行する")
     parser.add_argument("--dry-run-mail", action="store_true", help="メール送信をドライラン（プレビューのみ）")
@@ -838,12 +1299,31 @@ def main() -> int:
         print("Error: playwright is not installed.")
         return 2
 
+    config_dir = Path(args.config_dir)
+    env_name = get_scenario70_env(config_dir, args.env)
+    config: dict[str, str] = {}
+    if config_dir.exists():
+        try:
+            config = load_scenario70_config(config_dir, env_name)
+        except FileNotFoundError:
+            config = {"ENV": env_name, "CONFIG_DIR": str(config_dir)}
+
+    global MAIL_TO_SUCCESS, MAIL_TO_ERROR, MAIL_CC_ERROR
+    if config.get("MAIL_TO_SUCCESS"):
+        MAIL_TO_SUCCESS = split_mail_list(config["MAIL_TO_SUCCESS"])
+    if config.get("MAIL_TO_ERROR"):
+        MAIL_TO_ERROR = split_mail_list(config["MAIL_TO_ERROR"])
+    if config.get("MAIL_CC_ERROR"):
+        MAIL_CC_ERROR = split_mail_list(config["MAIL_CC_ERROR"])
+
     payment_date = _normalize_payment_date(args.payment_date)
-    base_url = args.base_url.strip()
-    artifact_dir = Path(args.artifact_dir)
+    base_url = (args.base_url or config.get("BASE_URL") or DEFAULT_BASE_URL).strip()
+    artifact_root = Path(args.artifact_dir or config.get("ARTIFACT_ROOT") or DEFAULT_ARTIFACT_DIR)
+    department_code = str(args.department_code or config.get("DEPARTMENT_CODE") or DEFAULT_DEPARTMENT_CODE).strip()
+    transfer_source = str(args.transfer_source or config.get("TRANSFER_SOURCE") or DEFAULT_TRANSFER_SOURCE).strip()
 
     # Ensure artifact dir exists early.
-    _ensure_dir(artifact_dir)
+    _ensure_dir(artifact_root)
 
     slip_nos: list[str] = []
     screenshots: list[Path] = []
@@ -851,15 +1331,26 @@ def main() -> int:
 
     try:
         result = run_payment_confirm(
+            env_name=env_name,
             base_url=base_url,
-            department_code=str(args.department_code).strip(),
+            department_code=department_code,
             payment_date=payment_date,
-            transfer_source=str(args.transfer_source).strip(),
-            artifact_dir=artifact_dir,
+            transfer_source=transfer_source,
+            artifact_root=artifact_root,
             execute=bool(args.execute),
             headless=bool(args.headless),
             dry_run_mail=bool(args.dry_run_mail),
         )
+        if result.status == "dry_run" and result.anomaly_records > 0:
+            try:
+                send_result_email(
+                    result=result,
+                    slip_nos=slip_nos,
+                    screenshot_paths=screenshots,
+                    dry_run_mail=bool(args.dry_run_mail),
+                )
+            except Exception:
+                print("Warning: dry-run anomaly email failed to send.")
         # In current implementation, slip list is saved in CSV; email slip_nos list is optional.
         # If needed, we can re-read CSV here.
         return 0 if result.status in ("success", "dry_run") else 1
@@ -870,10 +1361,13 @@ def main() -> int:
             result = RunResult(
                 run_id=_now_run_id(),
                 started_at=datetime.now().isoformat(timespec="seconds"),
+                env_name=env_name.upper(),
                 base_url=base_url,
-                department_code=str(args.department_code).strip(),
+                department_code=department_code,
                 payment_date=payment_date,
-                transfer_source=str(args.transfer_source).strip(),
+                transfer_source=transfer_source,
+                artifact_root=str(artifact_root.resolve()),
+                run_dir="",
                 status="failed",
                 error="Unhandled error before result initialization",
                 ended_at=datetime.now().isoformat(timespec="seconds"),
@@ -909,4 +1403,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

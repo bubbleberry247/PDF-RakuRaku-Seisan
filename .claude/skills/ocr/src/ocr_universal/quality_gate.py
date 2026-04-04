@@ -63,3 +63,70 @@ def route_result(
         return RoutingDecision.QUICK_REVIEW, "検証WARN: " + "; ".join(reasons)
 
     return RoutingDecision.AUTO_ACCEPT, "全フィールド検証PASS"
+
+
+# ---------------------------------------------------------------------------
+# PaddleOCR fallback trigger
+# ---------------------------------------------------------------------------
+
+def needs_paddle_fallback(
+    validated_fields: list[ValidatedField],
+    field_defs: list[dict],
+) -> tuple[bool, str]:
+    """
+    Determine if PaddleOCR fallback should be triggered.
+
+    Checks beyond just Null:
+    - Null required fields
+    - Format invalid (normalization failed)
+    - Plausibility issues (future date, zero amount, etc.)
+
+    Returns:
+        (needs_fallback, reason)
+    """
+    field_map = {f.name: f for f in validated_fields}
+    required_defs = {fd["name"]: fd for fd in field_defs if fd.get("required")}
+
+    reasons = []
+
+    for name, fd in required_defs.items():
+        f = field_map.get(name)
+
+        # Null check
+        if not f or f.raw_ja is None:
+            reasons.append(f"{name}: null")
+            continue
+
+        # Format validity (normalization failed)
+        if f.validation_status == ValidationStatus.FAIL:
+            reasons.append(f"{name}: format_invalid ({f.validation_message})")
+            continue
+
+        # Type-specific plausibility checks
+        field_type = fd.get("type", "text")
+
+        if field_type == "amount" and f.normalized is not None:
+            if f.normalized == 0:
+                reasons.append(f"{name}: zero_amount")
+            elif f.normalized < 0:
+                reasons.append(f"{name}: negative_amount")
+
+        if field_type == "date" and f.normalized is not None:
+            try:
+                from datetime import date as date_type
+                d = date_type.fromisoformat(str(f.normalized))
+                if d.year < 2000:
+                    reasons.append(f"{name}: suspicious_year ({d.year})")
+            except (ValueError, TypeError):
+                reasons.append(f"{name}: date_parse_error")
+
+        if field_type == "company" and f.normalized is not None:
+            # Check if vendor name is suspiciously short or only symbols
+            text = str(f.normalized).strip()
+            if len(text) < 2:
+                reasons.append(f"{name}: too_short ({text})")
+
+    if reasons:
+        return True, "; ".join(reasons)
+
+    return False, ""

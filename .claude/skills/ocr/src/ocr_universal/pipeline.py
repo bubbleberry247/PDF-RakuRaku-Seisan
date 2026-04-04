@@ -20,9 +20,10 @@ from .contracts import (
     ValidationStatus,
     make_idempotency_key,
 )
-from .gpt54_extractor import extract_fields
+from .gpt54_extractor import extract_fields, extract_fields_with_aux
 from .jp_norm import normalize_field
-from .quality_gate import route_result
+from .paddle_ocr import extract_text as paddle_extract_text
+from .quality_gate import route_result, needs_paddle_fallback
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +68,7 @@ def _classify_pdf(pdf_path: str) -> list[PageContext]:
         has_text = total_chars > 50 and cjk_ratio > 0.3
 
         # Render page as image (for GPT-5.4)
-        mat = fitz.Matrix(2.0, 2.0)  # 2x zoom = ~144 DPI
+        mat = fitz.Matrix(300/72, 300/72)  # 300 DPI
         pix = page.get_pixmap(matrix=mat)
         image_bytes = pix.tobytes("png")
 
@@ -202,10 +203,12 @@ class UniversalOCRPipeline:
         scenario_dir: Path | None = None,
         api_key: str | None = None,
         model: str = "gpt-5.4",
+        paddle_mode: str = "off",  # "always" | "fallback" | "off"
     ):
         self.scenario = scenario
         self.api_key = api_key
         self.model = model
+        self.paddle_mode = paddle_mode
 
         # Load scenario config
         if scenario_dir is None:
@@ -229,39 +232,56 @@ class UniversalOCRPipeline:
         for p in pages:
             p.doc_id = idem_key
 
+        # Stage 1.5: PaddleOCR pre-extraction (paddle_mode=="always")
+        aux_ocr_text = ""
+        if self.paddle_mode == "always":
+            aux_ocr_text = paddle_extract_text(pdf_path)
+
         # Stage 2: GPT-5.4 extraction (or text layer)
         for page in pages:
             if page.has_text_layer:
-                # Use text layer directly (create pseudo-extracted fields)
                 page.source = "text_layer"
-                # TODO: Parse text layer into fields (scenario-specific)
-                # For now, still send to API
-                page = extract_fields(page, self.field_defs, self.api_key, self.model)
-            else:
-                page = extract_fields(page, self.field_defs, self.api_key, self.model)
+            page = extract_fields(page, self.field_defs, self.api_key, self.model)
+
+        # Stage 2.5: 2nd pass with aux OCR (paddle_mode=="always")
+        if self.paddle_mode == "always" and aux_ocr_text:
+            for page in pages:
+                first_pass_fields = {
+                    ef.name: ef.raw_ja for ef in page.extracted_fields
+                }
+                page = extract_fields_with_aux(
+                    page, self.field_defs, first_pass_fields,
+                    aux_ocr_text, self.api_key, self.model,
+                )
 
         # Stage 3: Normalize + Validate
         for page in pages:
             page = _normalize_and_validate(page, self.field_defs, self.validations)
 
-        # Multi-page merge (use first page with data)
-        merged_fields: list[ValidatedField] = []
-        if len(pages) == 1:
-            merged_fields = pages[0].validated_fields
-        else:
-            # Merge strategy: first non-null value per field
-            seen: set[str] = set()
-            for page in pages:
-                for vf in page.validated_fields:
-                    if vf.name not in seen and vf.raw_ja is not None:
-                        merged_fields.append(vf)
-                        seen.add(vf.name)
-            # Fill missing from any page
-            for page in pages:
-                for vf in page.validated_fields:
-                    if vf.name not in seen:
-                        merged_fields.append(vf)
-                        seen.add(vf.name)
+        # Stage 3.5: PaddleOCR fallback (paddle_mode=="fallback")
+        if self.paddle_mode == "fallback":
+            # Merge first to check quality across pages
+            _tmp_merged = self._merge_validated_fields(pages)
+            needs_fb, fb_reason = needs_paddle_fallback(_tmp_merged, self.field_defs)
+            if needs_fb:
+                aux_ocr_text = paddle_extract_text(pdf_path)
+                if aux_ocr_text:
+                    for page in pages:
+                        first_pass_fields = {
+                            ef.name: ef.raw_ja for ef in page.extracted_fields
+                        }
+                        page = extract_fields_with_aux(
+                            page, self.field_defs, first_pass_fields,
+                            aux_ocr_text, self.api_key, self.model,
+                        )
+                        # Re-normalize: clear validated_fields then re-run
+                        page.validated_fields.clear()
+                        page = _normalize_and_validate(
+                            page, self.field_defs, self.validations,
+                        )
+
+        # Multi-page merge
+        merged_fields = self._merge_validated_fields(pages)
 
         # Stage 4: Quality Gate
         has_api_error = any(p.source == "api_failed" for p in pages)
@@ -290,6 +310,28 @@ class UniversalOCRPipeline:
             total_api_cost_usd=total_cost,
             total_tokens=total_tokens,
             errors=all_errors,
+            paddle_mode=self.paddle_mode,
         )
 
         return result
+
+    @staticmethod
+    def _merge_validated_fields(pages: list[PageContext]) -> list[ValidatedField]:
+        """Merge validated fields across pages (first non-null wins)."""
+        if len(pages) == 1:
+            return pages[0].validated_fields
+
+        merged: list[ValidatedField] = []
+        seen: set[str] = set()
+        for page in pages:
+            for vf in page.validated_fields:
+                if vf.name not in seen and vf.raw_ja is not None:
+                    merged.append(vf)
+                    seen.add(vf.name)
+        # Fill missing from any page
+        for page in pages:
+            for vf in page.validated_fields:
+                if vf.name not in seen:
+                    merged.append(vf)
+                    seen.add(vf.name)
+        return merged
