@@ -84,6 +84,22 @@ For every project, write a detailed FOR[yourname].md file that explains the whol
 
 ## Skills（ドメイン知識スキル）
 
+### RPA共通パターン集（全シナリオ横断）
+
+**場所**: `.claude/skills/rpa-patterns/`
+**自動参照**: @.claude/skills/rpa-patterns/SKILL.md
+
+**キーワード**: シナリオ作成、ロボット作成、新規シナリオ、新しいシナリオ、パターン、前例、テンプレ、書き方、使えるスキル探して、スキル探して、使えるスキル
+
+**知識範囲**（12パターン）:
+- リトライ、Excel合計行検索、部門別逆走査、PDF座標抽出（C#/RK10）
+- xlwings vs openpyxl、原本保護、JIDOKA検証、冪等性ログ（Python）
+- DOM Smoke Test、iframe操作、HTMLメール通知、銀行休業日対応
+
+**ルール**: このスキルが正本。シナリオ固有スキルへの**複製禁止**（参照のみ）。
+
+---
+
 ### RK10シナリオスキル（最重要）
 
 **場所**: `.claude/skills/rk10-scenario/`
@@ -96,6 +112,7 @@ For every project, write a detailed FOR[yourname].md file that explains the whol
 - RK10 UI操作（pywinauto UIA）
 - Keyence C# API（Excel、日付、ファイル操作）
 - エラーパターンと解決策
+- 共通パターンは `rpa-patterns` に移管済み
 
 ---
 
