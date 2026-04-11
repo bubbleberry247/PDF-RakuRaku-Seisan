@@ -47,3 +47,11 @@ tools/realesrgan/
 .gemini/
 .claude/settings.local.json
 .claude/settings.local.json.bak
+
+# --- WIP / generated (2026-04-11) ---
+tmp_*.py
+tmp_s70_*/
+tools/bench_results/
+.playwright-mcp/
+%TEMP%/
+*etc_nav_inspect.py

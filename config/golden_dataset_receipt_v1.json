@@ -1,0 +1,182 @@
+[
+  {
+    "id": 1,
+    "filename": "(株)ニトリ.pdf",
+    "vendor": "ニトリ",
+    "issue_date": "2026-01-08",
+    "amount": 32980,
+    "invoice_number": "T3430001044958",
+    "category": "receipt"
+  },
+  {
+    "id": 2,
+    "filename": "0109近東郵(百均)買物.pdf",
+    "vendor": "株式会社 東武",
+    "issue_date": "2026-01-08",
+    "amount": 1100,
+    "invoice_number": "",
+    "category": "receipt"
+  },
+  {
+    "id": 3,
+    "filename": "0109セリア(百均)買物.pdf",
+    "vendor": "Seria ビアゴ東刈谷店",
+    "issue_date": "2026-01-08",
+    "amount": 110,
+    "invoice_number": "T4200001013662",
+    "category": "receipt"
+  },
+  {
+    "id": 4,
+    "filename": "R8YEGアクティブ委員会：駐車場代.pdf",
+    "vendor": "Park Inn 刈谷駅前第2",
+    "issue_date": "2026-01-08",
+    "amount": 800,
+    "invoice_number": "T5180001103812",
+    "category": "receipt"
+  },
+  {
+    "id": 5,
+    "filename": "0114原田社長クレジット　名鉄協商㈱.pdf",
+    "vendor": "名鉄協商株式会社",
+    "issue_date": "2026-01-05",
+    "amount": 400,
+    "invoice_number": "T3180001033061",
+    "category": "receipt"
+  },
+  {
+    "id": 6,
+    "filename": "ごとう歯科打合せ駐車場代.pdf",
+    "vendor": "名鉄協商パーキング",
+    "issue_date": "2026-01-09",
+    "amount": 1100,
+    "invoice_number": "T3180001033061",
+    "category": "receipt"
+  },
+  {
+    "id": 7,
+    "filename": "鶴舞クリニック消防打合せ駐車場代.pdf",
+    "vendor": "三井不動産リアルティ株式会社",
+    "issue_date": "2026-1-09",
+    "amount": 1500,
+    "invoice_number": "T80100001140514",
+    "category": "receipt"
+  },
+  {
+    "id": 8,
+    "filename": "R8YEGアクティブ委員会：懇親会.pdf",
+    "vendor": "mughetto",
+    "issue_date": "2026-01-17",
+    "amount": 5000,
+    "invoice_number": "T5810062469326",
+    "category": "receipt"
+  },
+  {
+    "id": 9,
+    "filename": "MX-2650FV_20260110_094535.pdf",
+    "vendor": "シンワ菱油株式会社 パウメトウ今渡SS",
+    "issue_date": "2025-11-15",
+    "amount": 2000,
+    "invoice_number": "T4200001019230",
+    "category": "receipt"
+  },
+  {
+    "id": 10,
+    "filename": "2026,1,10もち吉1500.pdf",
+    "vendor": "株式会社もち吉 刈谷店",
+    "issue_date": "2026-01-10",
+    "amount": 1500,
+    "invoice_number": "T3290801014357",
+    "category": "receipt"
+  },
+  {
+    "id": 11,
+    "filename": "MX-2650FV_20260110_094419.pdf",
+    "vendor": "apollostation セルフ東郷",
+    "issue_date": "2025-12-11",
+    "amount": 2000,
+    "invoice_number": "T3080101014475",
+    "category": "receipt"
+  },
+  {
+    "id": 12,
+    "filename": "BP-60C31_20260108_100404.pdf",
+    "vendor": "株式会社バロー",
+    "issue_date": "2026-01-07",
+    "amount": 10000,
+    "invoice_number": "T8200001031520",
+    "category": "receipt"
+  },
+  {
+    "id": 13,
+    "filename": "MX-2650FV_20260110_094342.pdf",
+    "vendor": "有限会社ハセ川石油",
+    "issue_date": "2025-12-09",
+    "amount": 2000,
+    "invoice_number": "T8180002001269",
+    "category": "receipt"
+  },
+  {
+    "id": 14,
+    "filename": "0114原田社長クレジット　ピアゴ.pdf",
+    "vendor": "ピアゴ 東刈谷店",
+    "issue_date": "2026-01-05",
+    "amount": 1274,
+    "invoice_number": "T4180001104506",
+    "category": "receipt"
+  },
+  {
+    "id": 15,
+    "filename": "2025,12,27名鉄協商400.pdf",
+    "vendor": "名鉄協商株式会社",
+    "issue_date": "2025-12-27",
+    "amount": 400,
+    "invoice_number": "T3180001033061",
+    "category": "receipt"
+  },
+  {
+    "id": 16,
+    "filename": "MX-2650FV_20260110_094458.pdf",
+    "vendor": "コスモ石油販売（株）東中部カンパニー セルフピュア香久山",
+    "issue_date": "2025-12-16",
+    "amount": 2000,
+    "invoice_number": "T5010001146720",
+    "category": "receipt"
+  },
+  {
+    "id": 17,
+    "filename": "MX-2650FV_20260110_094253.pdf",
+    "vendor": "株式会社オートバックス中部販売長久手",
+    "issue_date": "2026-01-09",
+    "amount": 4160,
+    "invoice_number": "T7100001022431",
+    "category": "receipt"
+  },
+  {
+    "id": 18,
+    "filename": "doc06591420260109181028.pdf",
+    "vendor": "刈谷市会計管理者",
+    "issue_date": "2023-01-09",
+    "amount": 3400,
+    "invoice_number": "t5000020232106",
+    "category": "receipt"
+  },
+  {
+    "id": 19,
+    "filename": "東京インテリア家具.pdf",
+    "vendor": "東京インテリア家具名古屋本店",
+    "issue_date": "2026-01-08",
+    "amount": 108278,
+    "invoice_number": "t19011501007680",
+    "category": "receipt"
+  },
+  {
+    "id": 20,
+    "filename": "20251226131426403.pdf",
+    "vendor": "衣浦豊田道路株式会社（ARC）",
+    "issue_date": "2025-12-25",
+    "amount": 600,
+    "invoice_number": "T2180001124464",
+    "category": "receipt"
+  }
+]

@@ -96,6 +96,11 @@ def extract_fields(
     user_prompt = (
         f"Extract the following fields from this document image:\n"
         f"{json.dumps(field_names, ensure_ascii=False)}\n\n"
+        f"Important rules for total_amount:\n"
+        f"- Return the MAIN total amount on the invoice (ご請求金額, 合計金額, 請求額)\n"
+        f"- If the invoice clearly shows BOTH 税抜合計 and 税込合計 as separate labeled lines, prefer the 税抜 amount\n"
+        f"- Do NOT pick subtotals, line items, or partial amounts — only the final total\n"
+        f"- If unsure which is the main total, return the largest prominently displayed amount\n\n"
         f"Return JSON matching this schema:\n"
         f"{json.dumps(schema, ensure_ascii=False, indent=2)}"
     )

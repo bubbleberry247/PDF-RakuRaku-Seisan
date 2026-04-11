@@ -1,0 +1,956 @@
+[
+  {
+    "pdf": "R1gakkaA_mondai.pdf",
+    "page": 2,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R1_gakkaA_p02.png"
+  },
+  {
+    "pdf": "R1gakkaA_mondai.pdf",
+    "page": 20,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R1_gakkaA_p20.png"
+  },
+  {
+    "pdf": "R1gakkaB_mondai.pdf",
+    "page": 2,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R1_gakkaB_p02.png"
+  },
+  {
+    "pdf": "R1gakkaB_mondai.pdf",
+    "page": 3,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R1_gakkaB_p03.png"
+  },
+  {
+    "pdf": "R1gakkaB_mondai.pdf",
+    "page": 5,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R1_gakkaB_p05.png"
+  },
+  {
+    "pdf": "R1gakkaB_mondai.pdf",
+    "page": 7,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R1_gakkaB_p07.png"
+  },
+  {
+    "pdf": "R1gakkaB_mondai.pdf",
+    "page": 8,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R1_gakkaB_p08.png"
+  },
+  {
+    "pdf": "R1gakkaB_mondai.pdf",
+    "page": 10,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R1_gakkaB_p10.png"
+  },
+  {
+    "pdf": "R1gakkaB_mondai.pdf",
+    "page": 12,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R1_gakkaB_p12.png"
+  },
+  {
+    "pdf": "R1gakkaB_mondai.pdf",
+    "page": 13,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R1_gakkaB_p13.png"
+  },
+  {
+    "pdf": "R2gakkaA_mondai.pdf",
+    "page": 16,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R2_gakkaA_p16.png"
+  },
+  {
+    "pdf": "R2gakkaB_mondai.pdf",
+    "page": 2,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R2_gakkaB_p02.png"
+  },
+  {
+    "pdf": "R2gakkaB_mondai.pdf",
+    "page": 3,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R2_gakkaB_p03.png"
+  },
+  {
+    "pdf": "R2gakkaB_mondai.pdf",
+    "page": 4,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R2_gakkaB_p04.png"
+  },
+  {
+    "pdf": "R2gakkaB_mondai.pdf",
+    "page": 5,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R2_gakkaB_p05.png"
+  },
+  {
+    "pdf": "R2gakkaB_mondai.pdf",
+    "page": 6,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R2_gakkaB_p06.png"
+  },
+  {
+    "pdf": "R2gakkaB_mondai.pdf",
+    "page": 9,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R2_gakkaB_p09.png"
+  },
+  {
+    "pdf": "R2gakkaB_mondai.pdf",
+    "page": 11,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R2_gakkaB_p11.png"
+  },
+  {
+    "pdf": "R2gakkaB_mondai.pdf",
+    "page": 12,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R2_gakkaB_p12.png"
+  },
+  {
+    "pdf": "R3gakkaA_mondai.pdf",
+    "page": 4,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaA_p04.png"
+  },
+  {
+    "pdf": "R3gakkaA_mondai.pdf",
+    "page": 7,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaA_p07.png"
+  },
+  {
+    "pdf": "R3gakkaA_mondai.pdf",
+    "page": 10,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaA_p10.png"
+  },
+  {
+    "pdf": "R3gakkaA_mondai.pdf",
+    "page": 17,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaA_p17.png"
+  },
+  {
+    "pdf": "R3gakkaA_mondai.pdf",
+    "page": 21,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaA_p21.png"
+  },
+  {
+    "pdf": "R3gakkaB_mondai.pdf",
+    "page": 2,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaB_p02.png"
+  },
+  {
+    "pdf": "R3gakkaB_mondai.pdf",
+    "page": 3,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaB_p03.png"
+  },
+  {
+    "pdf": "R3gakkaB_mondai.pdf",
+    "page": 5,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaB_p05.png"
+  },
+  {
+    "pdf": "R3gakkaB_mondai.pdf",
+    "page": 6,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaB_p06.png"
+  },
+  {
+    "pdf": "R3gakkaB_mondai.pdf",
+    "page": 12,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaB_p12.png"
+  },
+  {
+    "pdf": "R3gakkaB_mondai.pdf",
+    "page": 20,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R3_gakkaB_p20.png"
+  },
+  {
+    "pdf": "R4gakkaA_mondai.pdf",
+    "page": 3,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaA_p03.png"
+  },
+  {
+    "pdf": "R4gakkaA_mondai.pdf",
+    "page": 4,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaA_p04.png"
+  },
+  {
+    "pdf": "R4gakkaA_mondai.pdf",
+    "page": 11,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaA_p11.png"
+  },
+  {
+    "pdf": "R4gakkaA_mondai.pdf",
+    "page": 13,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaA_p13.png"
+  },
+  {
+    "pdf": "R4gakkaA_mondai.pdf",
+    "page": 14,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaA_p14.png"
+  },
+  {
+    "pdf": "R4gakkaA_mondai.pdf",
+    "page": 16,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaA_p16.png"
+  },
+  {
+    "pdf": "R4gakkaA_mondai.pdf",
+    "page": 17,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaA_p17.png"
+  },
+  {
+    "pdf": "R4gakkaA_mondai.pdf",
+    "page": 18,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaA_p18.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 2,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p02.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 3,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p03.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 5,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p05.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 8,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p08.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 11,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p11.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 12,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p12.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 15,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p15.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 16,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p16.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 17,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p17.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 18,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p18.png"
+  },
+  {
+    "pdf": "R4gakkaB_mondai.pdf",
+    "page": 20,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R4_gakkaB_p20.png"
+  },
+  {
+    "pdf": "R5gakkaA_mondai.pdf",
+    "page": 10,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaA_p10.png"
+  },
+  {
+    "pdf": "R5gakkaA_mondai.pdf",
+    "page": 11,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaA_p11.png"
+  },
+  {
+    "pdf": "R5gakkaA_mondai.pdf",
+    "page": 18,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaA_p18.png"
+  },
+  {
+    "pdf": "R5gakkaA_mondai.pdf",
+    "page": 22,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaA_p22.png"
+  },
+  {
+    "pdf": "R5gakkaB_mondai.pdf",
+    "page": 2,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaB_p02.png"
+  },
+  {
+    "pdf": "R5gakkaB_mondai.pdf",
+    "page": 3,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaB_p03.png"
+  },
+  {
+    "pdf": "R5gakkaB_mondai.pdf",
+    "page": 5,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaB_p05.png"
+  },
+  {
+    "pdf": "R5gakkaB_mondai.pdf",
+    "page": 8,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaB_p08.png"
+  },
+  {
+    "pdf": "R5gakkaB_mondai.pdf",
+    "page": 10,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaB_p10.png"
+  },
+  {
+    "pdf": "R5gakkaB_mondai.pdf",
+    "page": 13,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaB_p13.png"
+  },
+  {
+    "pdf": "R5gakkaB_mondai.pdf",
+    "page": 16,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaB_p16.png"
+  },
+  {
+    "pdf": "R5gakkaB_mondai.pdf",
+    "page": 17,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaB_p17.png"
+  },
+  {
+    "pdf": "R5gakkaB_mondai.pdf",
+    "page": 19,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaB_p19.png"
+  },
+  {
+    "pdf": "R5gakkaB_mondai.pdf",
+    "page": 20,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R5_gakkaB_p20.png"
+  },
+  {
+    "pdf": "R6gakkaA_mondai.pdf",
+    "page": 2,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaA_p02.png"
+  },
+  {
+    "pdf": "R6gakkaA_mondai.pdf",
+    "page": 3,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaA_p03.png"
+  },
+  {
+    "pdf": "R6gakkaA_mondai.pdf",
+    "page": 4,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaA_p04.png"
+  },
+  {
+    "pdf": "R6gakkaA_mondai.pdf",
+    "page": 5,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaA_p05.png"
+  },
+  {
+    "pdf": "R6gakkaA_mondai.pdf",
+    "page": 6,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaA_p06.png"
+  },
+  {
+    "pdf": "R6gakkaA_mondai.pdf",
+    "page": 8,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaA_p08.png"
+  },
+  {
+    "pdf": "R6gakkaA_mondai.pdf",
+    "page": 9,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaA_p09.png"
+  },
+  {
+    "pdf": "R6gakkaA_mondai.pdf",
+    "page": 20,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaA_p20.png"
+  },
+  {
+    "pdf": "R6gakkaA_mondai.pdf",
+    "page": 27,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaA_p27.png"
+  },
+  {
+    "pdf": "R6gakkaA_mondai.pdf",
+    "page": 30,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaA_p30.png"
+  },
+  {
+    "pdf": "R6gakkaB_mondai.pdf",
+    "page": 3,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaB_p03.png"
+  },
+  {
+    "pdf": "R6gakkaB_mondai.pdf",
+    "page": 5,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaB_p05.png"
+  },
+  {
+    "pdf": "R6gakkaB_mondai.pdf",
+    "page": 8,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaB_p08.png"
+  },
+  {
+    "pdf": "R6gakkaB_mondai.pdf",
+    "page": 9,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaB_p09.png"
+  },
+  {
+    "pdf": "R6gakkaB_mondai.pdf",
+    "page": 11,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaB_p11.png"
+  },
+  {
+    "pdf": "R6gakkaB_mondai.pdf",
+    "page": 13,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaB_p13.png"
+  },
+  {
+    "pdf": "R6gakkaB_mondai.pdf",
+    "page": 15,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaB_p15.png"
+  },
+  {
+    "pdf": "R6gakkaB_mondai.pdf",
+    "page": 16,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaB_p16.png"
+  },
+  {
+    "pdf": "R6gakkaB_mondai.pdf",
+    "page": 18,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R6_gakkaB_p18.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 2,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p02.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 3,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p03.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 4,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p04.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 5,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p05.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 6,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p06.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 9,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p09.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 15,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p15.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 16,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p16.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 21,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p21.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 23,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p23.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 24,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p24.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 27,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p27.png"
+  },
+  {
+    "pdf": "R7gakkaA_mondai.pdf",
+    "page": 30,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaA_p30.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 2,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p02.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 3,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p03.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 4,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p04.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 5,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p05.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 6,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p06.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 8,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p08.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 11,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p11.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 12,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p12.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 14,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p14.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 15,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p15.png"
+  },
+  {
+    "pdf": "R7gakkaB_mondai.pdf",
+    "page": 20,
+    "has_image": false,
+    "has_図": true,
+    "image_count": 0,
+    "large_image_area": 0,
+    "png": "R7_gakkaB_p20.png"
+  }
+]
