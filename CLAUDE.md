@@ -1,57 +1,17 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 For every project, write a detailed FOR[yourname].md file that explains the whole project in plain language.
 
 ---
 
 ## 憲法（Constitution）— 全ての判断に優先する原則
 
-### 業界標準リサーチ原則
-**問題に対する業界標準のアプローチを調査し、それを参考に独自のアプローチを導き出す。**
-
-- 設計判断・技術選定・実装パターンの決定前に、まず業界がどう解いているかを調べる
-- 調査結果をそのままコピーするのではなく、自分たちの文脈（規模・頻度・制約）に合わせて適用する
-- 「なぜこのアプローチか」を業界標準との比較で説明できる状態にする
-
-### シンプルさ優先原則
-**素のClaude Code ＞ 複雑なagentワークフロー。過度な分割・抽象化は逆効果。**
-
-- タスクを細かく分割しすぎると、コンテキスト断片化・引継ぎロス・オーバーヘッドで品質が下がる
-- まず素のClaude Codeで解けないか試す。解けるなら、それが最適解
-- Agent/Subagentは「素では不可能 or 非効率」な場合のみ使う（並列化・専門知識委託・巨大コンテキスト分離）
-- 複雑さを追加するたびに「この複雑さは本当に必要か？」を問う
-
-### コンテキスト予算管理原則
-**有限のコンテキストを最大効率で使い切る。**
-
-- CLAUDE.mdは入口に徹する（150行以下）。詳細はAGENTS.md・Skills・Rulesに分離
-- サブタスクはコンテキスト50%以内で完了できるサイズに設計する
-- 手動コンパクト(`/compact`)は50%までに留める（それ以上は情報喪失リスク）
-- 不要な情報をコンテキストに入れない：必要な知識だけを、必要なタイミングで読み込む
-
-### 段階的情報開示原則（Progressive Disclosure）
-**必要な知識だけを、必要なタイミングで渡す。**
-
-- 3層アーキテクチャ: **Command（入口）→ Skill（知識）→ Subagent（実行）**
-- 全知識を事前に読み込まない。キーワードマッチやタスク種別で必要なSkillだけをロード
-- Subagentには「そのタスクに必要な最小限のコンテキスト」だけを渡す
-- Tier 1（常時）/ Tier 2（スキル別）/ Tier 3（オンデマンド）の3階層で管理
-
-### 自己検証原則（Self-Verification）
-**検証手段の質 = 成果物の品質。テストなきコード変更は禁止。**
-
-- コード変更の前に、まず検証手段（テスト・照合・dry-run）を確認または作成する
-- テストがないプロジェクトでは、先にテストを書いてからコード変更に入る
-- 「動いた」ではなく「検証できた」をもって完了とする
-
-### オーケストレーション専念原則（Team Orchestration）
-**チーム編成時、リーダーはオーケストレーションに徹する。実作業はエージェントに委託する。**
-
-- リーダーの役割: タスク分解・割り当て・進捗監視・品質レビュー・統合判断
-- エージェントの役割: コード実装・調査・テスト実行などの実作業
-- リーダーが自分で実装に手を出すと、オーケストレーションが止まり全体が遅延する
+- **業界標準リサーチ**: 設計判断・技術選定の前に業界標準を調査し、自分たちの文脈に合わせて適用する
+- **シンプルさ優先**: 素のClaude Code ＞ 複雑なagentワークフロー。複雑さを追加するたびに「本当に必要か？」を問う
+- **コンテキスト予算管理**: CLAUDE.mdは入口（150行以下）。詳細はAGENTS.md・Skills・Rulesに分離
+- **段階的情報開示**: Command（入口）→ Skill（知識）→ Subagent（実行）。必要な知識だけを必要なタイミングで
+- **自己検証**: 「動いた」ではなく「検証できた」をもって完了とする。テストなきコード変更は禁止
+- **オーケストレーション専念**: チーム編成時、リーダーは実装に手を出さない
 
 ---
 
@@ -61,197 +21,35 @@ For every project, write a detailed FOR[yourname].md file that explains the whol
 
 ---
 
-## Claude Code runtime notes（Claude Code固有）
+## Claude Code runtime notes
 
 - plansDirectory は `./plans`（設定済み）
-- SessionStart hook で、セッション開始時に以下を自動注入：
-  - `plans/decisions.md`（必読）
-  - `plans/handoff.md`（あれば）
-- context_window が 70% 以上になったら：
-  1) `plans/handoff.md` を短く更新（Done/Next/Risks/検証）
-  2) 新しい"決定"があれば `plans/decisions.md` に追記
-  3) 必要なら `/compact`
-- hook timeout は最大 120 秒（重い処理はhookに入れない）
+- SessionStart hook で `plans/handoff.md` を自動注入
+- context_window が 70% 以上になったら: ① `plans/handoff.md` を更新 ② 必要なら `/compact`
+- hook timeout は最大 120 秒
+
+## 「MDに書いて」の追記先
+
+- 恒常ルール → `AGENTS.md` 末尾 `## Project Memory` → Archive に記録し Active Rules Summary に昇格
+- Claude Code固有の設定 → 本ファイルの runtime セクションへ
 
 ---
 
-## 「MDに書いて」の追記先（重要）
+## Skills（キーワード → SKILL.md を読んでから作業開始）
 
-- 原則：恒常ルールは `AGENTS.md` 末尾 `## Project Memory` に追記する（CLAUDE.mdは入口のため肥大化させない）
-- 例外：Claude Code固有の設定・運用（hooks/statusLine/plansDirectory など）を明示的に書きたい場合のみ、本ファイルの runtime セクションへ追記
+詳細インデックス: `.claude/skills/INDEX.md`
 
----
+| スキル | トリガーキーワード |
+|--------|-------------------|
+| RPA共通パターン | シナリオ作成、ロボット作成、パターン、前例、テンプレ |
+| RK10シナリオ | RK10、Keyence、.rks、Program.cs、pywinauto |
+| シナリオ55振込転記 | シナリオ55、振込、楽楽精算、総合振込、勘定奉行 |
+| シナリオ44 OCR | PDF、OCR、テキスト抽出、請求書、回転補正 |
+| Video2PDD | Video2PDD、PAD、Power Automate、Robin、PDD |
+| レコル | レコル、RecoRu、勤怠、勤務区分、有休、打刻 |
+| GAS Webapp | GAS、Google Apps Script、clasp、doGet |
 
-## Skills（ドメイン知識スキル）
-
-### RPA共通パターン集（全シナリオ横断）
-
-**場所**: `.claude/skills/rpa-patterns/`
-**自動参照**: @.claude/skills/rpa-patterns/SKILL.md
-
-**キーワード**: シナリオ作成、ロボット作成、新規シナリオ、新しいシナリオ、パターン、前例、テンプレ、書き方、使えるスキル探して、スキル探して、使えるスキル
-
-**知識範囲**（12パターン）:
-- リトライ、Excel合計行検索、部門別逆走査、PDF座標抽出（C#/RK10）
-- xlwings vs openpyxl、原本保護、JIDOKA検証、冪等性ログ（Python）
-- DOM Smoke Test、iframe操作、HTMLメール通知、銀行休業日対応
-
-**ルール**: このスキルが正本。シナリオ固有スキルへの**複製禁止**（参照のみ）。
-
----
-
-### RK10シナリオスキル（最重要）
-
-**場所**: `.claude/skills/rk10-scenario/`
-**自動参照**: @.claude/skills/rk10-scenario/SKILL.md
-
-**キーワード**: RK10、Keyence、シナリオ、.rks、Program.cs、pywinauto
-
-**知識範囲**:
-- .rksファイル編集（ZIP形式、Program.csのみ編集）
-- RK10 UI操作（pywinauto UIA）
-- Keyence C# API（Excel、日付、ファイル操作）
-- エラーパターンと解決策
-- 共通パターンは `rpa-patterns` に移管済み
-
----
-
-### シナリオ55（振込Excel転記）スキル
-
-**場所**: `.claude/skills/scenario-55/`
-**自動参照**: @.claude/skills/scenario-55/SKILL.md
-
-**キーワード**: シナリオ55、振込、Excel転記、楽楽精算、支払依頼、総合振込、勘定奉行、支払伝票
-
-**知識範囲**:
-- 楽楽精算→Excel転記の業務ルール（15日/25日/末日、承認ステータス、支払方法）
-- 3層データ判定（Entry/Ops/RPA）
-- Excel構造（2行1セット、ブロック境界検出）
-- テンプレートマスタ設計と科目推定
-- 検証結果（R7.10: I列94.8%, コードバグ0）
-
----
-
-### scenario44-OCR（シナリオ44 PDF OCR精度向上）
-
-**場所**: `.claude/skills/scenario44-OCR/`
-**自動参照**: @.claude/skills/scenario44-OCR/SKILL.md
-
-**キーワード**: PDF、OCR、テキスト抽出、請求書、領収書、回転補正、傾き補正
-
----
-
-### Video2PDD（PAD録画→PDD）スキル
-
-**場所**: `.claude/skills/video2pdd/`
-**自動参照**: @.claude/skills/video2pdd/SKILL.md
-
-**キーワード**: Video2PDD、PAD、Power Automate Desktop、Robin、PDD、プロセス設計書、録画、書き起こし
-
-**知識範囲**:
-- PAD Free版のRobinスクリプト取得方法（コピペ手順）
-- Robin→event_log→Excel パイプライン（4フェーズ）
-- ルールベース日本語テンプレート辞書の拡張
-- Gap検出（ambiguous_element, coordinate_only_click等）
-- PDD Excel 4シート出力（概要フロー/詳細手順/未解決項目/メタデータ）
-
----
-
-### レコル（RecoRu）スキル
-
-**場所**: `.claude/skills/recoru/`
-
-**自動起動キーワード**: レコル、RecoRu、勤怠管理、勤務区分、有休、振休、代休、公休、打刻、締め、申請
-
-**使用方法**:
-- 上記キーワードを含む質問をするとスキルが自動起動
-- スキルはドメイン知識ドキュメント（`docs/domain/recoru/`）を参照して回答
-
-**参照ドキュメント**:
-| ドキュメント | 用途 |
-|-------------|------|
-| `docs/domain/recoru/10_kbn_dictionary.md` | 勤務区分辞書（最重要） |
-| `docs/domain/recoru/30_application_howto.md` | 申請手順 |
-| `docs/domain/recoru/40_edge_cases.md` | 例外ケース |
-
-**質問例**:
-```
-振休と代休の違いは？
-有休申請の手順を教えて
-締め後に修正したい
-```
-
----
-
-### GAS Webapp（SPA）スキル
-
-**場所**: `.claude/skills/gas-webapp/`
-**自動参照**: @.claude/skills/gas-webapp/SKILL.md
-
-**キーワード**: GAS、Google Apps Script、Webアプリ、SPA、clasp、doGet、google.script.run、HtmlService、スプレッドシートDB
-
-**知識範囲**:
-- GAS + HTML SPA構成（単一index.html、インラインCSS/JS）
-- Spreadsheet as DB（SHEETS/HEADERS定義、CRUD helpers）
-- api.gs パターン（clientUserKey、toSerializable_、エラー返却）
-- ハイブリッド認証（Google + localStorage + 復元コード）
-- clasp デプロイ（`-i`必須）
-- 実績: archi-16w トレーニングアプリ（@37バージョン、本番運用中）
-
----
-
-## 再発防止チェックリスト（2026-02-02 振り返り）
-
-### 1. UI変更は影響範囲を全画面で検証する
-
-**事例**: archi-16w @32 ナビボタンポカヨケ（回答前は非表示）→ Home/中断するボタンまで消えるリグレッション発生 → @34で修正
-
-**ルール**:
-- UI要素の表示/非表示を変更する場合、**その要素が表示される全画面・全状態**を列挙してからコードを書く
-- 特に「条件付き非表示」は、意図しない要素まで巻き込むリスクが高い
-- デプロイ前チェック: 変更した画面だけでなく、隣接画面（前後の遷移先）も必ず確認
-
-### 2. clasp deploy は必ず `-i <deploymentId>` を付ける
-
-**事例**: `-i`なしで`clasp deploy`を実行すると新しいデプロイメントが作成され、URLが変わる（既存ユーザーがアクセスできなくなる）
-
-**ルール**:
-```bash
-# 正しい（既存URLを更新）
-clasp deploy -i AKfycbxVu6IgDAj5lbx9KCVEwsTC-GdG1-H5oYAOotW0x7DdBesM2UrpNkF0KRhliPi0Q-zUcg
-
-# 危険（新URL生成）
-clasp deploy
-```
-
-### 3. OCR修正は必ずフル回帰テストを実行してから適用する
-
-**事例**:
-- Fix 5（OCR confidence閾値でスキップ）→ 他ファイルで金額欠損リグレッション → ロールバック
-- Fix 1（円サフィックス除去）→ Super Safety帳票でリグレッション → 条件追加で修正
-- bbox座標アプローチ → -5件の金額リグレッション → アプローチ自体を断念
-
-**ルール**:
-- OCRパターン追加/変更後、**全テストケース（ALL-N）のスコア**を変更前後で比較する
-- スコアが1件でも悪化したら、原因特定してから適用する（「他は改善したから」で押し通さない）
-- 新パターンは既存パターンを壊さない**追加型**にする（既存ロジックの書き換えは最終手段）
-
-### 4. エラーハンドリングは類似関数と揃える
-
-**事例**: `doStartMock`のsuccessハンドラに`res._error`/`!res.attemptId`のバリデーションがない（`doStartTest`にはある）→ 模試中断→再開でHomeに戻されるバグ（未解決）
-
-**ルール**:
-- 新しいAPI呼び出し関数を書くとき、**同じパターンの既存関数**（doStartTest等）のエラーハンドリングをコピーしてから開始する
-- successハンドラでも「サーバーが論理エラーを返す可能性」を常に想定する
-
-### 5. 「小さく変えて、測って、学んで、また変える」を徹底する
-
-**事例**: 複数の改善を1デプロイにまとめた結果、リグレッション発生時にどの変更が原因か特定しにくい
-
-**ルール**:
-- 1デプロイ = 1変更（可能な限り）
-- 複数変更をまとめる場合、各変更の影響範囲が独立していることを確認する
-- リグレッション発生時は「どの変更が原因か」を最初に切り分ける
+**注意**: Skill を使うときは `external-repos/my-claude-skills/{name}/templates/` の実装コードも確認する。
 
 ---
 
