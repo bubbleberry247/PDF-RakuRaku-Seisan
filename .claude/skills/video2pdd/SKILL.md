@@ -1,3 +1,8 @@
+---
+name: video2pdd
+description: Use when converting PAD recordings or video files to PDD Excel — Robin script parser, Gemini video analysis, process design document generation, Python automation code
+---
+
 # Video2PDD Skill
 
 ## Overview

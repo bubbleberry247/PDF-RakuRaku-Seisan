@@ -1,3 +1,8 @@
+---
+name: scenario44-OCR
+description: Use when improving OCR accuracy for シナリオ44 PDF expense reports — preprocessing config, YomiToku table recognition, regression testing, confidence threshold tuning
+---
+
 # scenario44-OCR — シナリオ44 PDF OCR 精度向上版
 
 ## 目的
@@ -105,3 +110,12 @@ python main_44_rk10.py --pre
 - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\decisions\projects\pdf-ocr.md`
 - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\external-repos\my-claude-skills\pdf-ocr\templates\pdf_preprocess.py`
 - `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\external-repos\my-claude-skills\pdf-ocr\templates\pdf_ocr.py`
+
+---
+
+## Gotchas
+- `do_enhance=True` は逆効果のケースあり。初期値 `False` を維持すること
+- 信頼度閾値でスキップ → 他ファイルで金額欠損リグレッション実績あり（Fix 5事件）— 閾値採用禁止
+- bbox座標アプローチ → -5件の金額リグレッション実績あり（アプローチ自体を採用禁止）
+- OCRパターン変更後は必ず全テストケース（ALL-N）のスコアを変更前後で比較すること
+- スコアが1件でも悪化したら「他は改善した」で押し通さない — 原因特定してから適用

@@ -1,3 +1,9 @@
+---
+name: gas-webapp
+description: Use when working on GAS (Google Apps Script) web apps — clasp push, clasp deploy -i, doGet, HtmlService, google.script.run, Spreadsheet as DB, SPA development and deployment
+context: fork
+---
+
 # GAS Webapp (SPA) Skill
 
 ## Overview
@@ -417,6 +423,7 @@ curl "https://script.google.com/macros/s/<deploymentId>/exec"
 | Success handler gets error object | Check `res._error` in success handler too |
 | CSP blocks external scripts | All JS must be inline in index.html |
 | 6-minute execution limit | Break long operations, use batch processing |
+| Python/headless script redirected to Google login | `"access": "ANYONE"` = Googleサインイン必須。匿名アクセスには `"access": "ANYONE_ANONYMOUS"` を使う |
 
 ## 11. Testing / Diagnostics
 
@@ -438,3 +445,12 @@ curl "https://script.google.com/macros/s/<deploymentId>/exec"
 - Deploy URL pattern: `https://script.google.com/macros/s/<deploymentId>/exec`
 - Spreadsheet as DB: Each sheet = one table, row 1 = headers
 - Cloning example: doboku-14w-training (cloned from archi-16w-training, 2026-02-14)
+
+---
+
+## Gotchas
+- `clasp deploy`（-iなし）→ 新URL生成 = 既存ユーザーアクセス不可。**必ず `-i <deploymentId>`**
+- `access: "ANYONE"` は Googleサインイン必須。匿名アクセスには `"ANYONE_ANONYMOUS"` を使う
+- Date型は `google.script.run` でシリアライズ不可 → 返り値は必ず `toSerializable_()` でラップ
+- UI要素の表示/非表示を変更する場合、**全画面・全状態**を列挙してからコードを書く（条件付き非表示は意図しない要素まで巻き込む）
+- 新しいAPI呼び出し関数は必ず既存関数（doStartTest等）のエラーハンドリングをコピーしてから書き始める（successハンドラでも `res._error` チェック必須）

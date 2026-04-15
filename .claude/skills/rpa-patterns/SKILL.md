@@ -1,3 +1,8 @@
+---
+name: rpa-patterns
+description: Use when creating new RPA scenarios — retry loops, JIDOKA verification, 冪等性 log, DOM smoke test, iframe operations, HTMLメール通知, Excel automation patterns
+---
+
 # RPA 共通パターン集（実戦検証済み）
 
 ## 概要

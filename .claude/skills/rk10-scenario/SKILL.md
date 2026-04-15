@@ -1,3 +1,9 @@
+---
+name: rk10-scenario
+description: Use when editing .rks files, RK10 RPA scenarios, Program.cs Keyence C# API — ZIP extraction, utf-8-sig encoding, pywinauto UI automation, scenario debugging
+context: fork
+---
+
 # RK10シナリオ作成 Skill
 
 ## 概要
@@ -345,3 +351,12 @@ C:\ProgramData\RK10\Robots\{番号} {シナリオ名}\
 - **詳細スキル**: `repo:/external-repos/my-claude-skills/rk10-scenario/skill.md`
 - **各ロボットフォルダ**: `C:\ProgramData\RK10\Robots\`
 - **シナリオ43完成版**: `C:\ProgramData\RK10\Robots\43 一般経費_日本情報サービス協同組合(ETC)明細の作成\scenario\４３一般経費_日本情報サービス協同組合(ETC)明細の作成_完成版.rks`
+
+---
+
+## Gotchas
+- .rks は **ZIP形式**。編集対象は `Program.cs` のみ（id/meta はRK10が自動再生成 — 触らない）
+- エンコーディングは **utf-8-sig（BOM付き）** 必須。通常utf-8で書くと文字化け
+- `ExternalResourceReader.GetResourceText` 引数をコードで書き換えると「表の抽出に失敗しました」→ RK10 GUI で再設定必要（コード修正では直せない）
+- pywinauto操作が効かない → まずダイアログが出ていないか確認（ダイアログを先に処理しないと次に進めない）
+- Hook GR-002: env.txt を Read してから .rks を編集すること（未読だとブロックされる）

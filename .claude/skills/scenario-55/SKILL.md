@@ -1,3 +1,8 @@
+---
+name: scenario-55
+description: Use when working on 振込Excel転記 — 楽楽精算 scraping, Excel write with xlwings, 15日/25日/末日 payment groups, 勘定奉行 data generation
+---
+
 # Scenario 55: 振込Excel転記 Skill
 
 ## Overview
@@ -198,3 +203,12 @@ python test_past_month.py 2025-10 all --env LOCAL
 # Pre-deploy check
 python preflight_check.py --env PROD
 ```
+
+---
+
+## Gotchas
+- `--company-code 300` を忘れると件数が**4倍**になる（グループ全社が混入）
+- **H列・G列は数式列** → 絶対に上書きしない。D列（店）もRPA書込禁止
+- openpyxl で78シート×マージセルのExcelを開くと2,734箇所差分（破損）→ **xlwings(COM)を使う**
+- 都度振込・口座振替はRPA除外対象（楽楽精算に存在してもExcelに書かない）
+- 12月末日支払は 12/31（銀行休業日）→ `classify_payment_type_fixed()` で12/30に繰り上げ済み

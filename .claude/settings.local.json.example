@@ -1,0 +1,9 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/refs/heads/main/.claude/claude-code-settings.json",
+  "_comment": "このファイルを settings.local.json にコピーしてPC固有パスを入力してください。settings.local.json は .gitignore 対象です。",
+  "env": {
+    "ROBOT_ROOT": "C:\\ProgramData\\RK10\\Robots",
+    "LOCAL_MOCK_ROOT": "C:\\RK10_MOCK",
+    "CLASP_TOKEN_PATH": ""
+  }
+}
