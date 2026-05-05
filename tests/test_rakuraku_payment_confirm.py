@@ -1,6 +1,7 @@
 import importlib.util
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 
@@ -95,6 +96,7 @@ class TestRakurakuPaymentConfirm(unittest.TestCase):
             page_no=1,
             row_group_index=1,
         )
+        record = replace(record, payment_method="総合振込", payment_method_source="detail_view")
 
         classified = MODULE.classify_slip_record(record, "2025/01/14")  # type: ignore[attr-defined]
 
@@ -110,11 +112,35 @@ class TestRakurakuPaymentConfirm(unittest.TestCase):
             page_no=1,
             row_group_index=2,
         )
+        record = replace(record, payment_method="総合振込", payment_method_source="detail_view")
 
         classified = MODULE.classify_slip_record(record, "2025/01/14")  # type: ignore[attr-defined]
 
         self.assertEqual(classified.decision, "anomaly")
         self.assertEqual(classified.decision_reason, "non_company_fee_burden")
+
+    def test_classify_slip_record_rejects_non_bulk_transfer(self) -> None:
+        record = MODULE.parse_slip_block_texts(  # type: ignore[attr-defined]
+            row1_text="00016110\n東海インプル建設株式会社\n瀬戸　阿紀子\n2025/10/01\n2025/10/02\n1,000\n2025/10/31\n保存不要",
+            row2_text="三菱ＨＣキャピタル株式会社",
+            row3_text="リース料\n当方負担",
+            checkbox_name="kakutei(16110)",
+            page_no=1,
+            row_group_index=1,
+        )
+        record = replace(record, payment_method="口座振替", payment_method_source="detail_view")
+
+        classified = MODULE.classify_slip_record(record, "2025/10/31")  # type: ignore[attr-defined]
+
+        self.assertEqual(classified.decision, "anomaly")
+        self.assertEqual(classified.decision_reason, "non_bulk_transfer")
+
+    def test_detect_detail_payment_method_reads_labeled_value(self) -> None:
+        method = MODULE._detect_detail_payment_method(  # type: ignore[attr-defined]
+            "支払方法\t口座振替\n右記の今回御請求高を口座振替致します。"
+        )
+
+        self.assertEqual(method, "口座振替")
 
     def test_validate_selection_expectations_accepts_matching_count_and_amount(self) -> None:
         record = MODULE.parse_slip_block_texts(  # type: ignore[attr-defined]

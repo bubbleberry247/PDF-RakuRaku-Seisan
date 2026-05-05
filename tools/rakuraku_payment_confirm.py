@@ -26,6 +26,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional, Sequence
+from urllib.parse import urljoin
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -144,6 +145,7 @@ class SlipRecord:
     fee_burden: str | None
     original_save: str | None
     checkbox_name: str | None
+    detail_url: str | None
     decision: str
     decision_reason: str
     raw_text: str
@@ -209,6 +211,13 @@ def _detect_payment_method(text: str) -> str | None:
     return None
 
 
+def _detect_detail_payment_method(text: str) -> str | None:
+    match = re.search(r"支払方法\s*(" + "|".join(map(re.escape, KNOWN_PAYMENT_METHODS)) + r")", text)
+    if match:
+        return match.group(1)
+    return _detect_payment_method(text)
+
+
 def parse_slip_row_text(row_text: str, payment_date: str) -> SlipRecord:
     text = " ".join([t for t in (row_text or "").split() if t])
     slip_match = PAYMENT_SLIP_NO_RE.search(text)
@@ -249,6 +258,7 @@ def parse_slip_row_text(row_text: str, payment_date: str) -> SlipRecord:
         fee_burden=None,
         original_save=None,
         checkbox_name=None,
+        detail_url=None,
         decision="unclassified",
         decision_reason="fallback_row_text_parse",
         raw_text=text,
@@ -351,6 +361,7 @@ def parse_slip_block_texts(
         fee_burden=_extract_fee_burden(row3_text),
         original_save=_extract_original_save(row1_text),
         checkbox_name=checkbox_name,
+        detail_url=None,
         decision="unclassified",
         decision_reason="unclassified",
         raw_text=raw_text,
@@ -360,6 +371,10 @@ def parse_slip_block_texts(
 def classify_slip_record(record: SlipRecord, payment_date: str) -> SlipRecord:
     if record.payment_date != payment_date:
         return replace(record, decision="skipped", decision_reason="payment_date_mismatch")
+    if not record.payment_method:
+        return replace(record, decision="anomaly", decision_reason="missing_payment_method")
+    if record.payment_method != "総合振込":
+        return replace(record, decision="anomaly", decision_reason="non_bulk_transfer")
     if not record.fee_burden:
         return replace(record, decision="anomaly", decision_reason="missing_fee_burden")
     if record.fee_burden != "当方負担":
@@ -583,6 +598,11 @@ class RakurakuPaymentConfirmer:
             page_no=page_no,
             row_group_index=row_group_index,
         )
+        detail_link = row1.locator("a").first
+        if detail_link.count() > 0:
+            href = (detail_link.get_attribute("href") or "").strip()
+            if href:
+                record = replace(record, detail_url=urljoin(self.base_url, href))
         fee_select = row3.locator("select[name^='tesuryoKbn(']").first
         if fee_select.count() > 0:
             fee_value = (fee_select.input_value() or "").strip()
@@ -590,6 +610,24 @@ class RakurakuPaymentConfirmer:
             if fee_burden:
                 record = replace(record, fee_burden=fee_burden)
         return record
+
+    def resolve_payment_method_from_detail(self, record: SlipRecord) -> SlipRecord:
+        if record.payment_method or not record.detail_url:
+            return record
+        if not self.context:
+            raise RuntimeError("browser context not started")
+        detail_page = self.context.new_page()
+        try:
+            detail_page.goto(record.detail_url, timeout=90_000)
+            detail_page.wait_for_load_state("domcontentloaded")
+            time.sleep(1)
+            text = _read_text(detail_page.locator("body").first)
+            method = _detect_detail_payment_method(text)
+            if not method:
+                return record
+            return replace(record, payment_method=method, payment_method_source="detail_view")
+        finally:
+            detail_page.close()
 
     def select_slips_by_payment_date(self, payment_date: str) -> SlipSelectionResult:
         if not self.page:
@@ -615,6 +653,8 @@ class RakurakuPaymentConfirmer:
                 page_no=1,
                 row_group_index=row_group_index,
             )
+            if record.payment_date == payment_date:
+                record = self.resolve_payment_method_from_detail(record)
             classified = classify_slip_record(record, payment_date)
             inventory.append(classified)
             if classified.payment_date == payment_date:
@@ -677,6 +717,7 @@ class RakurakuPaymentConfirmer:
                     "fee_burden",
                     "original_save",
                     "checkbox_name",
+                    "detail_url",
                     "decision",
                     "decision_reason",
                     "raw_text",
@@ -700,6 +741,7 @@ class RakurakuPaymentConfirmer:
                         r.fee_burden or "",
                         r.original_save or "",
                         r.checkbox_name or "",
+                        r.detail_url or "",
                         r.decision,
                         r.decision_reason,
                         r.raw_text,
