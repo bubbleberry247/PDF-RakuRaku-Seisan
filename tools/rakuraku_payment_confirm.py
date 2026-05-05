@@ -550,8 +550,10 @@ class RakurakuPaymentConfirmer:
                 raise RuntimeError(
                     "検索結果が上限を超えています。支払日などの検索条件をさらに絞り込んでください。"
                 )
-            if "検索条件に一致するデータは見つかりませんでした" in body_text:
-                raise RuntimeError("所属部門検索の結果が0件でした")
+            if "検索条件に一致するデータは見つかりませんでした" in body_text or "検索結果は0件です" in body_text:
+                raise RuntimeError(
+                    f"対象なし: 所属部門={department_code} / (申請)支払日={payment_date or '未指定'} の検索結果は0件です"
+                )
             if self.page.locator("input[name^='kakutei(']").count() > 0:
                 return
         raise RuntimeError("所属部門検索後の一覧表示を確認できませんでした")
