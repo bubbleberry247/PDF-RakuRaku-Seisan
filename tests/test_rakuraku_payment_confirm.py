@@ -115,3 +115,38 @@ class TestRakurakuPaymentConfirm(unittest.TestCase):
 
         self.assertEqual(classified.decision, "anomaly")
         self.assertEqual(classified.decision_reason, "non_company_fee_burden")
+
+    def test_validate_selection_expectations_accepts_matching_count_and_amount(self) -> None:
+        record = MODULE.parse_slip_block_texts(  # type: ignore[attr-defined]
+            row1_text="00011452\n東海インプル建設株式会社\n瀬戸　阿紀子\n2025/01/05\n2025/01/06\n1,067\n2025/01/14\n保存不要",
+            row2_text="東海建物管理株式会社",
+            row3_text="TOCOビル 2F TIC専用(ガス料金) 12月分\n当方負担",
+            checkbox_name="kakutei(11417)",
+            page_no=1,
+            row_group_index=1,
+        )
+
+        total = MODULE.validate_selection_expectations(  # type: ignore[attr-defined]
+            [record],
+            expected_count=1,
+            expected_total_amount_yen=1067,
+        )
+
+        self.assertEqual(total, 1067)
+
+    def test_validate_selection_expectations_rejects_amount_mismatch(self) -> None:
+        record = MODULE.parse_slip_block_texts(  # type: ignore[attr-defined]
+            row1_text="00011452\n東海インプル建設株式会社\n瀬戸　阿紀子\n2025/01/05\n2025/01/06\n1,067\n2025/01/14\n保存不要",
+            row2_text="東海建物管理株式会社",
+            row3_text="TOCOビル 2F TIC専用(ガス料金) 12月分\n当方負担",
+            checkbox_name="kakutei(11417)",
+            page_no=1,
+            row_group_index=1,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "合計金額"):
+            MODULE.validate_selection_expectations(  # type: ignore[attr-defined]
+                [record],
+                expected_count=1,
+                expected_total_amount_yen=999,
+            )

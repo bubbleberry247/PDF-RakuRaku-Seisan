@@ -7,7 +7,8 @@ Scenario 70: 楽楽精算「支払確定（支払先）」自動化（Playwright
 - `--execute` を付けない限り、確認ダイアログの OK は押しません（ドライラン）。
 
 Usage examples:
-    python rakuraku_payment_confirm.py --payment-date 2025/12/30 --execute
+    python rakuraku_payment_confirm.py --payment-date 2025/12/30
+    python rakuraku_payment_confirm.py --payment-date 2025/12/30 --execute --expected-count 28 --expected-total-amount 1,508,256 --bank-transfer-confirmed
     python rakuraku_payment_confirm.py --payment-date 2025/12/30 --dry-run-mail
 """
 
@@ -157,6 +158,9 @@ class RunResult:
     department_code: str
     payment_date: str
     transfer_source: str
+    expected_records: int | None
+    expected_total_amount_yen: int | None
+    bank_transfer_confirmed: bool
     artifact_root: str
     run_dir: str
     selected_records: int = 0
@@ -486,7 +490,20 @@ class RakurakuPaymentConfirmer:
         if "sapShihaShiharaiKakuteiKensaku" not in self.page.url:
             raise RuntimeError(f"支払確定（支払先）画面に遷移できませんでした: {self.page.url}")
 
-    def search_by_department(self, department_code: str) -> None:
+    def _fill_search_payment_date(self, payment_date: str) -> None:
+        if not self.page:
+            raise RuntimeError("page not started")
+        y, m, d = _split_ymd(payment_date)
+        for prefix in ("shihaYoteiDateFrom", "shihaYoteiDateTo"):
+            year = self.page.locator(f"input[name='{prefix}Year']").first
+            month = self.page.locator(f"input[name='{prefix}Month']").first
+            day = self.page.locator(f"input[name='{prefix}Day']").first
+            year.wait_for(state="visible", timeout=30_000)
+            year.fill(y)
+            month.fill(m)
+            day.fill(d)
+
+    def search_by_department(self, department_code: str, *, payment_date: str | None = None) -> None:
         if not self.page:
             raise RuntimeError("page not started")
 
@@ -505,12 +522,19 @@ class RakurakuPaymentConfirmer:
         except Exception:
             pass
 
+        if payment_date:
+            self._fill_search_payment_date(payment_date)
+
         # 検索
         search_btn = self.page.locator("button:has-text('検索'), input[value='検索']").first
         search_btn.click()
         for _ in range(30):
             time.sleep(1)
             body_text = _read_text(self.page.locator("body").first)
+            if "検索結果が上限" in body_text:
+                raise RuntimeError(
+                    "検索結果が上限を超えています。支払日などの検索条件をさらに絞り込んでください。"
+                )
             if "検索条件に一致するデータは見つかりませんでした" in body_text:
                 raise RuntimeError("所属部門検索の結果が0件でした")
             if self.page.locator("input[name^='kakutei(']").count() > 0:
@@ -863,6 +887,26 @@ def _make_run_key(payment_date: str, transfer_source: str, slip_nos: Sequence[st
     return f"{payment_date}|{transfer_source}|{slips}"
 
 
+def validate_selection_expectations(
+    records: Sequence[SlipRecord],
+    *,
+    expected_count: int | None,
+    expected_total_amount_yen: int | None,
+) -> int:
+    selected_total = sum(r.amount_yen or 0 for r in records)
+    if expected_count is not None and len(records) != expected_count:
+        raise RuntimeError(
+            "確認ゲート: 選択件数が銀行側/確認資料の件数と一致しません。"
+            f" expected={expected_count}, actual={len(records)}"
+        )
+    if expected_total_amount_yen is not None and selected_total != expected_total_amount_yen:
+        raise RuntimeError(
+            "確認ゲート: 選択合計金額が銀行側/確認資料の合計金額と一致しません。"
+            f" expected={expected_total_amount_yen}, actual={selected_total}"
+        )
+    return selected_total
+
+
 def run_payment_confirm(
     *,
     env_name: str,
@@ -872,6 +916,9 @@ def run_payment_confirm(
     transfer_source: str,
     artifact_root: Path,
     execute: bool,
+    expected_count: int | None,
+    expected_total_amount_yen: int | None,
+    bank_transfer_confirmed: bool,
     headless: bool,
     dry_run_mail: bool,
 ) -> RunResult:
@@ -895,6 +942,9 @@ def run_payment_confirm(
         department_code=department_code,
         payment_date=payment_date,
         transfer_source=transfer_source,
+        expected_records=expected_count,
+        expected_total_amount_yen=expected_total_amount_yen,
+        bank_transfer_confirmed=bank_transfer_confirmed,
         artifact_root=str(artifact_root),
         run_dir=str(run_dir),
         summary_path=str(summary_json_path),
@@ -913,6 +963,9 @@ def run_payment_confirm(
             "department_code": department_code,
             "payment_date": payment_date,
             "transfer_source": transfer_source,
+            "expected_records": expected_count,
+            "expected_total_amount_yen": expected_total_amount_yen,
+            "bank_transfer_confirmed": bank_transfer_confirmed,
             "artifact_root": str(artifact_root),
             "execute": execute,
             "headless": headless,
@@ -937,7 +990,7 @@ def run_payment_confirm(
         confirmer.goto_search_screen()
         screenshot_paths.append(confirmer.screenshot(f"{run_id}_search_screen.png"))
 
-        confirmer.search_by_department(department_code)
+        confirmer.search_by_department(department_code, payment_date=payment_date)
         screenshot_paths.append(confirmer.screenshot(f"{run_id}_list_screen.png"))
 
         selection = confirmer.select_slips_by_payment_date(payment_date)
@@ -959,6 +1012,12 @@ def run_payment_confirm(
             result.anomaly_report_path = str(anomaly_report_path)
 
         screenshot_paths.append(confirmer.screenshot(f"{run_id}_inventory.png"))
+
+        result.total_amount_yen = validate_selection_expectations(
+            records,
+            expected_count=expected_count,
+            expected_total_amount_yen=expected_total_amount_yen,
+        )
 
         # Rerun safety: if same exact selection was already confirmed, stop.
         run_key = _make_run_key(payment_date, transfer_source, [r.slip_no for r in records])
@@ -994,6 +1053,19 @@ def run_payment_confirm(
             _append_jsonl(ledger_excerpt_path, ledger_entry)
             return result
 
+        if not bank_transfer_confirmed:
+            raise RuntimeError(
+                "確認ゲート: 銀行振込完了の確認フラグがありません。"
+                " --bank-transfer-confirmed を付けずに確定OKは押せません。"
+            )
+        if expected_count is None:
+            raise RuntimeError(
+                "確認ゲート: --expected-count が未指定です。銀行側の件数照合なしで確定OKは押せません。"
+            )
+        if expected_total_amount_yen is None:
+            raise RuntimeError(
+                "確認ゲート: --expected-total-amount が未指定です。銀行側の金額照合なしで確定OKは押せません。"
+            )
         if anomalies:
             raise RuntimeError(
                 "確認ゲート: 自動実行対象外の異常候補が "
@@ -1291,6 +1363,13 @@ def main() -> int:
     parser.add_argument("--artifact-dir", default=None, help="成果物出力先ディレクトリ（フルパス）")
     parser.add_argument("--headless", action="store_true", help="ヘッドレス（非推奨）")
     parser.add_argument("--execute", action="store_true", help="確認ダイアログのOKを押して支払確定まで実行する")
+    parser.add_argument("--expected-count", type=int, default=None, help="銀行側/確認資料と一致すべき対象件数")
+    parser.add_argument("--expected-total-amount", default=None, help="銀行側/確認資料と一致すべき合計金額（例: 1,234,567）")
+    parser.add_argument(
+        "--bank-transfer-confirmed",
+        action="store_true",
+        help="銀行側の振込完了を人が確認済みの場合のみ指定する",
+    )
     parser.add_argument("--dry-run-mail", action="store_true", help="メール送信をドライラン（プレビューのみ）")
 
     args = parser.parse_args()
@@ -1321,6 +1400,11 @@ def main() -> int:
     artifact_root = Path(args.artifact_dir or config.get("ARTIFACT_ROOT") or DEFAULT_ARTIFACT_DIR)
     department_code = str(args.department_code or config.get("DEPARTMENT_CODE") or DEFAULT_DEPARTMENT_CODE).strip()
     transfer_source = str(args.transfer_source or config.get("TRANSFER_SOURCE") or DEFAULT_TRANSFER_SOURCE).strip()
+    expected_total_amount_yen = (
+        _parse_int_yen(str(args.expected_total_amount))
+        if args.expected_total_amount is not None
+        else None
+    )
 
     # Ensure artifact dir exists early.
     _ensure_dir(artifact_root)
@@ -1338,6 +1422,9 @@ def main() -> int:
             transfer_source=transfer_source,
             artifact_root=artifact_root,
             execute=bool(args.execute),
+            expected_count=args.expected_count,
+            expected_total_amount_yen=expected_total_amount_yen,
+            bank_transfer_confirmed=bool(args.bank_transfer_confirmed),
             headless=bool(args.headless),
             dry_run_mail=bool(args.dry_run_mail),
         )
@@ -1355,7 +1442,7 @@ def main() -> int:
         # If needed, we can re-read CSV here.
         return 0 if result.status in ("success", "dry_run") else 1
 
-    except Exception:
+    except Exception as exc:
         # Send error email with traceback summary.
         if result is None:
             result = RunResult(
@@ -1366,10 +1453,13 @@ def main() -> int:
                 department_code=department_code,
                 payment_date=payment_date,
                 transfer_source=transfer_source,
+                expected_records=args.expected_count,
+                expected_total_amount_yen=expected_total_amount_yen,
+                bank_transfer_confirmed=bool(args.bank_transfer_confirmed),
                 artifact_root=str(artifact_root.resolve()),
                 run_dir="",
                 status="failed",
-                error="Unhandled error before result initialization",
+                error=f"{type(exc).__name__}: {exc}",
                 ended_at=datetime.now().isoformat(timespec="seconds"),
             )
         result.error = result.error or traceback.format_exc()
