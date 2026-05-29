@@ -23,6 +23,9 @@
     ]
   },
   "effortLevel": "high",
+  "enabledPlugins": {
+    "security-guidance@claude-plugins-official": true
+  },
   "allowedTools": [
     "Read",
     "Edit",
