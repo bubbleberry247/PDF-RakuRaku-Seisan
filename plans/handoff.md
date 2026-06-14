@@ -120,3 +120,32 @@ C:\ProgramData\Generative AI\Github\
 - `clasp deploy` は必ず `-i <deploymentId>` を付ける（URLが変わる）
 - sekisan/takkenの既存DBは壊さない（既に本番データあり）
 - `archi2ji` と `doboku2ji` のauth実装は sekisan/takken の auth.gs をコピーベースにする（独自実装不要）
+
+---
+
+## 直近引き継ぎ（2026-05-27 / シナリオ56）
+
+- シナリオ56は `C:\ProgramData\RK10\Robots\56 資金繰り表エクセル入力\senario\56資金繰り表_PROD実行_20260527_095013.rks` でRK10本番実行・実書込・メール送信まで確認済み。
+- 現行入力は `\\192.168.7.251\TIC-mainSV\【個人使用フォルダ】\管理部\・𠮷田\RPA\RPA\②資金繰り表入力\全社入金予定表　20260526保存.xlsx`。
+- 現行転記先コピーは `\\192.168.7.251\TIC-mainSV\【個人使用フォルダ】\管理部\・𠮷田\RPA\RPA\②資金繰り表入力\資金繰り表 20260526保存.xlsx`。
+- 現行正本は `C:\ProgramData\RK10\Robots\56 資金繰り表エクセル入力\docs\56_現行運用手順書_20260527.xlsx` と `C:\ProgramData\RK10\Robots\56 資金繰り表エクセル入力\docs\56_現行フロー図_20260527.docx`。
+- Markdown版 `C:\ProgramData\RK10\Robots\56 資金繰り表エクセル入力\docs\56_現行運用手順書_20260527.md` と `C:\ProgramData\RK10\Robots\56 資金繰り表エクセル入力\docs\56_現行フロー図_20260527.md` は作業用メモ扱い。
+- 資料は `C:\ProgramData\RK10\Robots\56 資金繰り表エクセル入力\docs` 配下に集約し、シナリオフォルダ直下には置かない。
+- PRODメール宛先は `kanri.tic@tokai-ic.co.jp`、LOCALメール宛先は `kalimistk@gmail.com`。
+- 決定ログは `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\decisions\projects\scenario-56-shikinguri.md` に追記済み。
+
+---
+
+## 直近引き継ぎ（2026-06-13 / 自社RPA管理プラットフォーム独立リポジトリ化）
+
+- **新リポジトリ作成**: `rpa-mgmt-console`（RK10置き換えの自社プラットフォーム）を rpa-automation から独立。
+  - ローカル: `C:\ProgramData\Generative AI\Github\rpa-mgmt-console`（master）
+  - GitHub: https://github.com/bubbleberry247/rpa-mgmt-console （private）
+- **今日の成果**: Scenario Manifest v0.2（全15シナリオ+mock3=18 YAML・意味づけ層）、Global operation ledger（RK10併存中の二重実行防止・rk10_owns安全弁・op_ledger_cli）、s55/s58を不可逆+承認必須に確定、s42実アダプター+契約検証、smoke 18/18 PASS。
+- **設計・経緯の正本**: リポジトリ内 `docs/ARCHITECTURE.md`（設計図）/ `docs/DECISIONS_20260613.md`（意思決定）/ `FORFABLE.md`（平易な全体）。
+- **方針**: 「作って寝かせ、シナリオ単位で頃合いを見て順次フリップ」。RK10は各シナリオ実証まで本番維持。最大リスクは併存中の二重実行（ledgerで対処）。
+- **体制**: 実装の実務はCodex GPT-5.5に委託、Claudeはオーケストレーション・統合・検証に徹する。
+- **進捗（2026-06-14更新2）**: master=1ba2790（8コミット）。①per-PC config ②s70アダプター ③Controller硬化 ④要件v2.2文書 まで完了。代表アダプター3本（s42読み取り/s55不可逆/s70支払確定）+ Manifest契約v0.3 + operation ledger + Controller硬化（schedule/notify/backup最小骨格）+ per-PC config（LIVE runner解決）+ 要件定義書v2.2（docs/REQUIREMENTS_v2.2.md＝設計正本）。smoke 24/24 PASS。
+- **次アクション候補**: REQUIREMENTS_v2.2.md §11 残課題 G-001〜G-020（s70のCONTROLLER_AUTHORIZED監査要件・runner return code意味づけ・backup冗長コード整理 等）。本番移行に向けては事前検証V1-V10（現地実測）と各シナリオのreadiness前進（月次1本＝強制関数）。
+- **体制**: 実装の実務はCodex GPT-5.5に委託、Claudeはオーケストレーション・統合・検証に徹する。git操作（commit/merge/push）は各featureブランチ→master ff merge→pushの流れ。
+- 旧 rpa-automation/mgmt_console は残置（重複。整理は次回判断）。
