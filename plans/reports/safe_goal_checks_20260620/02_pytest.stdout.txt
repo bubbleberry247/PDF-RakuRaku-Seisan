@@ -418,4 +418,4 @@ tests/test_generate_completion_blocker_split_20260622.py::test_build_rks_open_on
 tests/test_generate_completion_blocker_split_20260622.py::test_build_rks_open_only_rows_skips_non_blocking_runtime_statuses PASSED [ 99%]
 tests/test_generate_completion_blocker_split_20260622.py::test_build_operator_gap_summary_separates_evidence_paths_from_operator_fields PASSED [100%]
 
-============================ 412 passed in 19.30s =============================
+============================ 412 passed in 24.78s =============================

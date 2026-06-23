@@ -1,6 +1,6 @@
     1: # Objective Completion Audit 2026-06-23
     2: 
-    3: - generated_at: `2026-06-24T02:49:34`
+    3: - generated_at: `2026-06-24T08:05:21`
     4: - overall_goal_complete: `True`
     5: - requirement_count: `9`
     6: - proved_count: `9`
@@ -34,6 +34,6 @@
    34: | REQ-04 | 実際の業務費用・件数・金額スコープを証跡化する | PROVED | business_cost_ready_count=14/14; excluded_scope_count=1 |  | 不足シナリオの件数/金額/安全dry-run証跡を追加する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_ledger_20260620\goal_evidence_ledger.json |
    35: | REQ-05 | 全シナリオの安全実行証跡を揃える | PROVED | safe_execution_ready_count=14/14; excluded_scope_count=1 |  | 不足シナリオの安全実行またはsafe-stop証跡を追加する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_ledger_20260620\goal_evidence_ledger.json |
    36: | REQ-06 | エラー発生時は原因究明と対策を実装する | PROVED | final_goal_complete=True; blocking_gate_count=0 |  | 追加対応なし。固定安全ランナーと完了ゲートは通過済み。 | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_completion_gate_20260620\goal_completion_gate.json |
-   37: | REQ-07 | 修正実装ファイルを別名保存でバックアップする | PROVED | backup_complete=True; missing_count=0; snapshot_id=20260624_024910 |  | コード成果物バックアップを再実行する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_code_artifact_backups_20260620\goal_code_artifact_backups.json |
+   37: | REQ-07 | 修正実装ファイルを別名保存でバックアップする | PROVED | backup_complete=True; missing_count=0; snapshot_id=20260624_080458 |  | コード成果物バックアップを再実行する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_code_artifact_backups_20260620\goal_code_artifact_backups.json |
    38: | REQ-08 | 最終ログ・報告を出し、移行先へ同期する | PROVED | source_count=54; copy_result_count=112; all_hashes_match=True; all_distribution_checks_pass=True; relative_inner_apply_fix=True |  | 同期manifestを再生成し、C/E配布先のhash一致を確認する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\final_operator_front_door_20260623\sync_manifest_final_operator_front_door_20260623.json; C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\final_operator_front_door_20260623\final_operator_front_door_distribution_check.json |
    39: | REQ-09 | 本番移行OK状態を最終確定する | PROVED | final_goal_complete=True; passed_gate_count=10/10; active_remaining_operator_not_ready_count=0/0; raw_remaining_operator_not_ready_count=0/0; excluded_scope_count=1 |  | 追加対応なし。Codex自動証跡確認、最終証跡同期、固定安全ランナーは通過済み。 | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_completion_gate_20260620\goal_completion_gate.json |

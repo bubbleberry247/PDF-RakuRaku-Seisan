@@ -1,5 +1,5 @@
     1: {
-    2:   "generated_at": "2026-06-24T02:49:34",
+    2:   "generated_at": "2026-06-24T08:05:21",
     3:   "report_status": "FINAL_COMPLETE_REPORT",
     4:   "final_goal_complete": true,
     5:   "safety": "read-only report consolidation only; no external operation",
@@ -84,7 +84,7 @@
    84:     "supplemental_remaining_runtime_evidence": ""
    85:   },
    86:   "rks_existing_evidence_search_summary": {
-   87:     "source_generated_at": "2026-06-24T02:49:00",
+   87:     "source_generated_at": "2026-06-24T08:04:48",
    88:     "overall_rks_production_ready": false,
    89:     "reviewed_non_promotable_count": 2,
    90:     "rows": [
@@ -165,7 +165,7 @@
   165:     "source_json": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\goal_evidence_actual_trace_overlay_20260623\\goal_evidence_actual_trace_overlay.json",
   166:     "source_markdown_numbered": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\goal_evidence_actual_trace_overlay_20260623\\goal_evidence_actual_trace_overlay.md.numbered",
   167:     "source_markdown_exists": true,
-  168:     "generated_at": "2026-06-24T02:49:30",
+  168:     "generated_at": "2026-06-24T08:05:20",
   169:     "scenario_count": 15,
   170:     "trace_ready_scenario_count": 15,
   171:     "trace_missing_scenario_count": 0,
@@ -178,7 +178,7 @@
   178:     "source_json": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\remaining_operator_input_completion_simulation_20260623\\remaining_operator_input_completion_simulation.json",
   179:     "source_markdown_numbered": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\remaining_operator_input_completion_simulation_20260623\\remaining_operator_input_completion_simulation.md.numbered",
   180:     "source_markdown_exists": true,
-  181:     "generated_at": "2026-06-24T02:49:22",
+  181:     "generated_at": "2026-06-24T08:05:11",
   182:     "simulation_passed": false,
   183:     "sample_completed_row_count": 0,
   184:     "sync_updated_cell_count": 0,

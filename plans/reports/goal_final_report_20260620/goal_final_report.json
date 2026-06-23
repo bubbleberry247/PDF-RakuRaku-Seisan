@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-24T02:49:34",
+  "generated_at": "2026-06-24T08:05:21",
   "report_status": "FINAL_COMPLETE_REPORT",
   "final_goal_complete": true,
   "safety": "read-only report consolidation only; no external operation",
@@ -84,7 +84,7 @@
     "supplemental_remaining_runtime_evidence": ""
   },
   "rks_existing_evidence_search_summary": {
-    "source_generated_at": "2026-06-24T02:49:00",
+    "source_generated_at": "2026-06-24T08:04:48",
     "overall_rks_production_ready": false,
     "reviewed_non_promotable_count": 2,
     "rows": [
@@ -165,7 +165,7 @@
     "source_json": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\goal_evidence_actual_trace_overlay_20260623\\goal_evidence_actual_trace_overlay.json",
     "source_markdown_numbered": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\goal_evidence_actual_trace_overlay_20260623\\goal_evidence_actual_trace_overlay.md.numbered",
     "source_markdown_exists": true,
-    "generated_at": "2026-06-24T02:49:30",
+    "generated_at": "2026-06-24T08:05:20",
     "scenario_count": 15,
     "trace_ready_scenario_count": 15,
     "trace_missing_scenario_count": 0,
@@ -178,7 +178,7 @@
     "source_json": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\remaining_operator_input_completion_simulation_20260623\\remaining_operator_input_completion_simulation.json",
     "source_markdown_numbered": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\remaining_operator_input_completion_simulation_20260623\\remaining_operator_input_completion_simulation.md.numbered",
     "source_markdown_exists": true,
-    "generated_at": "2026-06-24T02:49:22",
+    "generated_at": "2026-06-24T08:05:11",
     "simulation_passed": false,
     "sample_completed_row_count": 0,
     "sync_updated_cell_count": 0,

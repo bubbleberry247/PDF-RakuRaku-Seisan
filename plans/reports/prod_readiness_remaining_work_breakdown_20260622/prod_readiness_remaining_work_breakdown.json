@@ -1,8 +1,8 @@
 {
   "summary": {
-    "generated_at": "2026-06-24T02:49:35",
+    "generated_at": "2026-06-24T08:05:22",
     "goal_complete_line": "5: - final_goal_complete: `True`",
-    "safe_runner_generated_at": "3: - generated_at: `2026-06-24T02:49:35`",
+    "safe_runner_generated_at": "3: - generated_at: `2026-06-24T08:05:21`",
     "safe_runner_line": "4: - overall_passed: `True`",
     "blocking_gate_line": "8: - blocking_gate_count: `0`",
     "rks_validation_line": "5: - overall_rks_runtime_evidence_complete: `True`",

@@ -1,6 +1,6 @@
-# 全シナリオ稼働確認 最終報告ドラフト 2026-06-20
+# 全シナリオ稼働確認 最終報告 2026-06-20
 
-- generated_at: `2026-06-24T02:49:34`
+- generated_at: `2026-06-24T08:05:21`
 - report_status: `FINAL_COMPLETE_REPORT`
 - final_goal_complete: `True`
 - verdict: `完了`
@@ -32,7 +32,7 @@
 
 ## Remaining Operator Input Completion Simulation
 
-- source_generated_at: `2026-06-24T02:49:22`
+- source_generated_at: `2026-06-24T08:05:11`
 - simulation_passed: `False`
 - sample_completed_row_count: `0`
 - sync_updated_cell_count: `0`
@@ -77,7 +77,7 @@
 
 ## Goal Evidence Actual Trace Overlay
 
-- source_generated_at: `2026-06-24T02:49:30`
+- source_generated_at: `2026-06-24T08:05:20`
 - scenario_trace_ready: `15/15`
 - trace_missing_scenario_count: `0`
 - trace_script_missing_count: `0`
@@ -89,7 +89,7 @@
 
 ## RKS Existing Evidence Search
 
-- source_generated_at: `2026-06-24T02:49:00`
+- source_generated_at: `2026-06-24T08:04:48`
 - overall_rks_production_ready: `False`
 - reviewed_non_promotable_count: `2`
 

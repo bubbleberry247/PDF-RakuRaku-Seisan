@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-24T02:49:34",
+  "generated_at": "2026-06-24T08:05:21",
   "overall_goal_complete": true,
   "safety": "read-only objective audit; no RK10 ButtonRun, no production write, no real mail, no real print, no final submit, no payment, no paid Azure OCR",
   "requirement_count": 9,
@@ -86,7 +86,7 @@
       "requirement": "修正実装ファイルを別名保存でバックアップする",
       "status": "PROVED",
       "evidence": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\goal_code_artifact_backups_20260620\\goal_code_artifact_backups.json",
-      "current_value": "backup_complete=True; missing_count=0; snapshot_id=20260624_024910",
+      "current_value": "backup_complete=True; missing_count=0; snapshot_id=20260624_080458",
       "remaining_gap": "",
       "next_action": "コード成果物バックアップを再実行する"
     },

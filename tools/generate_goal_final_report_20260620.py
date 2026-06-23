@@ -836,6 +836,11 @@ def build_payload(
 
 def build_markdown(payload: dict[str, Any]) -> str:
     status = "完了" if payload["final_goal_complete"] else "未完了（ドラフト）"
+    title = (
+        "# 全シナリオ稼働確認 最終報告 2026-06-20"
+        if payload["final_goal_complete"]
+        else "# 全シナリオ稼働確認 最終報告ドラフト 2026-06-20"
+    )
     objective_progress = payload.get("objective_progress_summary", {})
     if not isinstance(objective_progress, dict):
         objective_progress = {}
@@ -857,7 +862,7 @@ def build_markdown(payload: dict[str, Any]) -> str:
             "- RKS `OK_CANDIDATE`, static guard, or safe-stop evidence is not treated as production runtime completion.",
         ]
     lines = [
-        "# 全シナリオ稼働確認 最終報告ドラフト 2026-06-20",
+        title,
         "",
         f"- generated_at: `{payload['generated_at']}`",
         f"- report_status: `{payload['report_status']}`",

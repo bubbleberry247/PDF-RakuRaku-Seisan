@@ -1,8 +1,8 @@
 # 本番移行OKまでの残作業分類 2026-06-22
 
-- generated_at: `2026-06-24T02:49:35`
+- generated_at: `2026-06-24T08:05:22`
 - goal_complete_source: `5: - final_goal_complete: `True``
-- safe_runner_generated_at_source: `3: - generated_at: `2026-06-24T02:49:35``
+- safe_runner_generated_at_source: `3: - generated_at: `2026-06-24T08:05:21``
 - safe_runner_source: `4: - overall_passed: `True``
 - blocking_gate_source: `8: - blocking_gate_count: `0``
 - rks_validation_source: `5: - overall_rks_runtime_evidence_complete: `True``

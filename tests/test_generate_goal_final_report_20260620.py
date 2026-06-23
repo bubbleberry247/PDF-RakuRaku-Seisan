@@ -658,6 +658,7 @@ def test_build_markdown_includes_strict_boundary_and_sources() -> None:
 
     markdown = module.build_markdown(payload)
 
+    assert "# 全シナリオ稼働確認 最終報告ドラフト 2026-06-20" in markdown
     assert "未完了（ドラフト）" in markdown
     assert "not a production completion report" in markdown
     assert "## Objective Progress Summary" in markdown
@@ -745,6 +746,8 @@ def test_build_markdown_uses_final_gate_boundary_when_complete() -> None:
 
     markdown = module.build_markdown(payload)
 
+    assert "# 全シナリオ稼働確認 最終報告 2026-06-20" in markdown
+    assert "# 全シナリオ稼働確認 最終報告ドラフト 2026-06-20" not in markdown
     assert "safe production-migration readiness gate passed" in markdown
     assert "not proof that irreversible production actions were performed" in markdown
     assert "strict_scenario_goal_evidence: `0/15`" in markdown
