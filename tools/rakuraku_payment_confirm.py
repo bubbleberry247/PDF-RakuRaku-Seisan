@@ -8,6 +8,7 @@ Scenario 70: 楽楽精算「支払確定（支払先）」自動化（Playwright
 
 Usage examples:
     python rakuraku_payment_confirm.py --payment-date 2025/12/30
+    python rakuraku_payment_confirm.py --payment-date 2025/12/30 --confirm-preview --expected-count 28 --expected-total-amount 1,508,256
     python rakuraku_payment_confirm.py --payment-date 2025/12/30 --execute --expected-count 28 --expected-total-amount 1,508,256 --bank-transfer-confirmed
     python rakuraku_payment_confirm.py --payment-date 2025/12/30 --dry-run-mail
 """
@@ -68,6 +69,7 @@ DEFAULT_TRANSFER_SOURCE = "三菱UFJ銀行（当座）/110"
 MAIL_TO_SUCCESS = ["kanri.tic@tokai-ic.co.jp"]
 MAIL_TO_ERROR = ["kanri.tic@tokai-ic.co.jp"]
 MAIL_CC_ERROR = ["kalimistk@gmail.com"]
+KANRI_MAIL_ADDRESS = "kanri.tic@tokai-ic.co.jp"
 
 PAYMENT_SLIP_NO_RE = re.compile(r"\b\d{8}\b")
 DATE_RE = re.compile(r"\b\d{4}/\d{2}/\d{2}\b")
@@ -80,6 +82,10 @@ CREDENTIAL_TARGET_ALIASES = (
     "RK10_RakurakuSeisan",
     "楽楽精算",
 )
+
+
+class NoTargetRecordsError(RuntimeError):
+    """Raised when the search completed normally but found no payable records."""
 
 
 def _normalize_payment_date(s: str) -> str:
@@ -149,6 +155,8 @@ class SlipRecord:
     decision: str
     decision_reason: str
     raw_text: str
+    fee_burden_before: str | None = None
+    fee_burden_action: str = ""
 
 
 @dataclass
@@ -175,10 +183,13 @@ class RunResult:
     selected_report_path: str | None = None
     anomaly_records: int = 0
     anomaly_report_path: str | None = None
+    manual_excluded_records: int = 0
+    manual_excluded_report_path: str | None = None
+    fee_burden_changed_records: int = 0
     preflight_path: str | None = None
     ledger_path: str | None = None
     ledger_excerpt_path: str | None = None
-    status: str = "started"  # started/success/failed/dry_run
+    status: str = "started"  # started/success/failed/dry_run/dry_run_no_target/confirm_preview
     error: str | None = None
     ended_at: str | None = None
 
@@ -188,6 +199,7 @@ class SlipSelectionResult:
     inventory: list[SlipRecord]
     selected: list[SlipRecord]
     anomalies: list[SlipRecord]
+    manual_excluded: list[SlipRecord]
 
 
 @dataclass(frozen=True)
@@ -374,12 +386,22 @@ def classify_slip_record(record: SlipRecord, payment_date: str) -> SlipRecord:
     if not record.payment_method:
         return replace(record, decision="anomaly", decision_reason="missing_payment_method")
     if record.payment_method != "総合振込":
-        return replace(record, decision="anomaly", decision_reason="non_bulk_transfer")
+        return replace(record, decision="manual_excluded", decision_reason="manual_payment_method")
     if not record.fee_burden:
         return replace(record, decision="anomaly", decision_reason="missing_fee_burden")
     if record.fee_burden != "当方負担":
         return replace(record, decision="anomaly", decision_reason="non_company_fee_burden")
     return replace(record, decision="selected", decision_reason="payment_date_match_and_company_fee")
+
+
+def _mark_company_fee_burden(record: SlipRecord, *, applied: bool) -> SlipRecord:
+    action = "changed_to_company_fee" if applied else "will_change_to_company_fee"
+    return replace(
+        record,
+        fee_burden_before=record.fee_burden,
+        fee_burden="当方負担",
+        fee_burden_action=action,
+    )
 
 
 class RakurakuPaymentConfirmer:
@@ -465,7 +487,17 @@ class RakurakuPaymentConfirmer:
         shots_dir = self.artifact_dir / "screenshots"
         _ensure_dir(shots_dir)
         path = shots_dir / name
-        self.page.screenshot(path=str(path), full_page=full_page)
+        try:
+            self.page.screenshot(path=str(path), full_page=full_page)
+        except Exception as exc:
+            warning_path = path.with_suffix(path.suffix + ".warning.txt")
+            warning_path.write_text(
+                "screenshot_failed\n"
+                f"path={path}\n"
+                f"error={type(exc).__name__}: {exc}\n",
+                encoding="utf-8",
+            )
+            return warning_path
         return path
 
     def login(self) -> None:
@@ -551,7 +583,7 @@ class RakurakuPaymentConfirmer:
                     "検索結果が上限を超えています。支払日などの検索条件をさらに絞り込んでください。"
                 )
             if "検索条件に一致するデータは見つかりませんでした" in body_text or "検索結果は0件です" in body_text:
-                raise RuntimeError(
+                raise NoTargetRecordsError(
                     f"対象なし: 所属部門={department_code} / (申請)支払日={payment_date or '未指定'} の検索結果は0件です"
                 )
             if self.page.locator("input[name^='kakutei(']").count() > 0:
@@ -631,7 +663,38 @@ class RakurakuPaymentConfirmer:
         finally:
             detail_page.close()
 
-    def select_slips_by_payment_date(self, payment_date: str) -> SlipSelectionResult:
+    def normalize_fee_burden_for_confirmation(
+        self,
+        record: SlipRecord,
+        *,
+        row3: Locator,
+        apply_change: bool,
+    ) -> SlipRecord:
+        if record.payment_method != "総合振込" or record.fee_burden != "先方負担":
+            return record
+        if not apply_change:
+            return _mark_company_fee_burden(record, applied=False)
+
+        fee_select = row3.locator("select[name^='tesuryoKbn(']").first
+        if fee_select.count() == 0:
+            raise RuntimeError(
+                f"手数料区分を当方負担へ変更できません: 伝票No={record.slip_no} の選択欄が見つかりません"
+            )
+        fee_select.select_option(value="0")
+        time.sleep(0.2)
+        fee_value = (fee_select.input_value() or "").strip()
+        if fee_value != "0":
+            raise RuntimeError(
+                f"手数料区分を当方負担へ変更できません: 伝票No={record.slip_no} value={fee_value}"
+            )
+        return _mark_company_fee_burden(record, applied=True)
+
+    def select_slips_by_payment_date(
+        self,
+        payment_date: str,
+        *,
+        apply_fee_burden_changes: bool = False,
+    ) -> SlipSelectionResult:
         if not self.page:
             raise RuntimeError("page not started")
         self.page.locator("text=伝票No").first.wait_for(state="visible", timeout=60_000)
@@ -644,6 +707,7 @@ class RakurakuPaymentConfirmer:
         inventory: list[SlipRecord] = []
         selected: list[SlipRecord] = []
         anomalies: list[SlipRecord] = []
+        manual_excluded: list[SlipRecord] = []
         matching_count = 0
 
         for row_group_index, (checkbox, row1, row2, row3) in enumerate(self.iter_slip_blocks(), start=1):
@@ -657,6 +721,11 @@ class RakurakuPaymentConfirmer:
             )
             if record.payment_date == payment_date:
                 record = self.resolve_payment_method_from_detail(record)
+                record = self.normalize_fee_burden_for_confirmation(
+                    record,
+                    row3=row3,
+                    apply_change=apply_fee_burden_changes,
+                )
             classified = classify_slip_record(record, payment_date)
             inventory.append(classified)
             if classified.payment_date == payment_date:
@@ -665,6 +734,8 @@ class RakurakuPaymentConfirmer:
                     selected.append(classified)
                 elif classified.decision == "anomaly":
                     anomalies.append(classified)
+                elif classified.decision == "manual_excluded":
+                    manual_excluded.append(classified)
 
         expected_count = summary.range_end - summary.range_start + 1
         if len(inventory) != expected_count:
@@ -672,9 +743,14 @@ class RakurakuPaymentConfirmer:
                 f"表示件数と抽出件数が一致しません: summary={expected_count}, parsed={len(inventory)}"
             )
         if matching_count == 0:
-            raise RuntimeError(f"対象なし: (申請)支払日={payment_date} の行が見つかりません")
+            raise NoTargetRecordsError(f"対象なし: (申請)支払日={payment_date} の行が見つかりません")
 
-        return SlipSelectionResult(inventory=inventory, selected=selected, anomalies=anomalies)
+        return SlipSelectionResult(
+            inventory=inventory,
+            selected=selected,
+            anomalies=anomalies,
+            manual_excluded=manual_excluded,
+        )
 
     def check_selected_slips(self, records: Sequence[SlipRecord]) -> None:
         if not self.page:
@@ -717,6 +793,8 @@ class RakurakuPaymentConfirmer:
                     "applicant",
                     "note",
                     "fee_burden",
+                    "fee_burden_before",
+                    "fee_burden_action",
                     "original_save",
                     "checkbox_name",
                     "detail_url",
@@ -741,6 +819,8 @@ class RakurakuPaymentConfirmer:
                         r.applicant or "",
                         r.note or "",
                         r.fee_burden or "",
+                        r.fee_burden_before or "",
+                        r.fee_burden_action,
                         r.original_save or "",
                         r.checkbox_name or "",
                         r.detail_url or "",
@@ -754,21 +834,37 @@ class RakurakuPaymentConfirmer:
     def set_footer_conditions(self, transfer_source: str, payment_date: str) -> None:
         if not self.page:
             raise RuntimeError("page not started")
-        footer = self.page.locator(
-            "xpath=//*[.//*[normalize-space()='振込元'] and .//*[normalize-space()='支払日'] and (.//button[normalize-space()='確定'] or .//input[@value='確定'])]"
-        ).first
+        confirm_btn = self.page.locator("button:has-text('確定'), input[value='確定']").last
+        confirm_btn.wait_for(state="visible", timeout=60_000)
+        footer = confirm_btn.locator(
+            "xpath=ancestor::*[.//*[normalize-space()='振込元'] and .//*[normalize-space()='支払日']][1]"
+        )
         footer.wait_for(state="visible", timeout=60_000)
 
         # 振込元
-        select_loc = footer.locator("select").first
-        if select_loc.count() > 0:
-            try:
-                select_loc.select_option(label=transfer_source)
-            except Exception:
-                # Some UIs need exact value; fallback to clicking options by text.
-                select_loc.select_option(value=transfer_source)
-        else:
-            raise RuntimeError("振込元のドロップダウンが見つかりません")
+        transfer_source_norm = " ".join(transfer_source.split())
+        selected_transfer_source = False
+        select_candidates = footer.locator("select")
+        for i in range(select_candidates.count()):
+            select_loc = select_candidates.nth(i)
+            options = select_loc.locator("option")
+            option_count = options.count()
+            for j in range(option_count):
+                option = options.nth(j)
+                label = " ".join((_read_text(option) or "").split())
+                value = (option.get_attribute("value") or "").strip()
+                if label == transfer_source_norm or value == transfer_source:
+                    select_loc.scroll_into_view_if_needed()
+                    try:
+                        select_loc.select_option(label=label)
+                    except Exception:
+                        select_loc.select_option(value=value)
+                    selected_transfer_source = True
+                    break
+            if selected_transfer_source:
+                break
+        if not selected_transfer_source:
+            raise RuntimeError(f"振込元のドロップダウン候補が見つかりません: {transfer_source}")
 
         # 支払日（年/月/日）
         y, m, d = _split_ymd(payment_date)
@@ -794,9 +890,11 @@ class RakurakuPaymentConfirmer:
         if not self.page:
             raise RuntimeError("page not started")
 
-        modal = self.page.locator(
-            "xpath=//*[contains(@class,'modal') or @role='dialog' or contains(@class,'ui-dialog')][.//*[normalize-space()='確認']]"
-        ).first
+        marker = self.page.locator("text=以下の内容で支払確定します。").first
+        marker.wait_for(state="visible", timeout=60_000)
+        modal = marker.locator(
+            "xpath=ancestor::*[(.//button[normalize-space()='OK'] or .//input[@value='OK']) and (.//button[normalize-space()='キャンセル'] or .//input[@value='キャンセル'])][1]"
+        )
         modal.wait_for(state="visible", timeout=60_000)
 
         def read_row(label: str) -> str:
@@ -907,6 +1005,50 @@ def _load_jsonl(path: Path) -> list[dict]:
     return items
 
 
+def _recent_artifact_payment_dates(artifact_root: Path, *, max_dates: int = 10) -> list[dict[str, object]]:
+    """Return recent payment dates seen in previous scenario70 artifacts."""
+    rows: dict[str, dict[str, object]] = {}
+    report_files = [
+        *artifact_root.glob("run_*/reports/raku_payment_confirm_*_*.csv"),
+        *(artifact_root.parent / "work" / "output").glob("scenario70_candidates_*.csv"),
+    ]
+    report_files = sorted(report_files, key=lambda p: p.stat().st_mtime, reverse=True)
+    for csv_path in report_files[:80]:
+        try:
+            with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    payment_date = str(row.get("payment_date") or "").strip()
+                    if not payment_date:
+                        continue
+                    amount_text = str(row.get("amount_yen") or row.get("amount") or "0").replace(",", "")
+                    try:
+                        amount = int(float(amount_text)) if amount_text else 0
+                    except ValueError:
+                        amount = 0
+                    info = rows.setdefault(
+                        payment_date,
+                        {
+                            "payment_date": payment_date,
+                            "records": 0,
+                            "amount_yen": 0,
+                            "latest_artifact": str(csv_path),
+                        },
+                    )
+                    info["records"] = int(info.get("records") or 0) + 1
+                    info["amount_yen"] = int(info.get("amount_yen") or 0) + amount
+                    if csv_path.stat().st_mtime > Path(str(info["latest_artifact"])).stat().st_mtime:
+                        info["latest_artifact"] = str(csv_path)
+        except Exception:
+            continue
+
+    return sorted(
+        rows.values(),
+        key=lambda item: (str(item.get("payment_date") or ""), int(item.get("records") or 0)),
+        reverse=True,
+    )[:max_dates]
+
+
 def _prepare_run_dirs(artifact_root: Path, run_id: str) -> dict[str, Path]:
     run_dir = artifact_root / f"run_{run_id}"
     paths = {
@@ -936,6 +1078,7 @@ def validate_selection_expectations(
     *,
     expected_count: int | None,
     expected_total_amount_yen: int | None,
+    allow_amount_recalculation: bool = False,
 ) -> int:
     selected_total = sum(r.amount_yen or 0 for r in records)
     if expected_count is not None and len(records) != expected_count:
@@ -943,7 +1086,11 @@ def validate_selection_expectations(
             "確認ゲート: 選択件数が銀行側/確認資料の件数と一致しません。"
             f" expected={expected_count}, actual={len(records)}"
         )
-    if expected_total_amount_yen is not None and selected_total != expected_total_amount_yen:
+    if (
+        expected_total_amount_yen is not None
+        and not allow_amount_recalculation
+        and selected_total != expected_total_amount_yen
+    ):
         raise RuntimeError(
             "確認ゲート: 選択合計金額が銀行側/確認資料の合計金額と一致しません。"
             f" expected={expected_total_amount_yen}, actual={selected_total}"
@@ -960,6 +1107,7 @@ def run_payment_confirm(
     transfer_source: str,
     artifact_root: Path,
     execute: bool,
+    confirm_preview: bool,
     expected_count: int | None,
     expected_total_amount_yen: int | None,
     bank_transfer_confirmed: bool,
@@ -1037,13 +1185,22 @@ def run_payment_confirm(
         confirmer.search_by_department(department_code, payment_date=payment_date)
         screenshot_paths.append(confirmer.screenshot(f"{run_id}_list_screen.png"))
 
-        selection = confirmer.select_slips_by_payment_date(payment_date)
+        selection = confirmer.select_slips_by_payment_date(
+            payment_date,
+            apply_fee_burden_changes=execute,
+        )
         inventory = selection.inventory
         records = selection.selected
         anomalies = selection.anomalies
+        manual_excluded = selection.manual_excluded
+        fee_burden_changed_records = [
+            r for r in records if r.fee_burden_action in {"changed_to_company_fee", "will_change_to_company_fee"}
+        ]
         result.inventory_records = len(inventory)
         result.selected_records = len(records)
         result.anomaly_records = len(anomalies)
+        result.manual_excluded_records = len(manual_excluded)
+        result.fee_burden_changed_records = len(fee_burden_changed_records)
 
         # Export report before any irreversible action.
         report_path = confirmer.export_report(run_id, inventory, kind="full_inventory")
@@ -1054,13 +1211,19 @@ def run_payment_confirm(
         if anomalies:
             anomaly_report_path = confirmer.export_report(run_id, anomalies, kind="anomalies")
             result.anomaly_report_path = str(anomaly_report_path)
+        if manual_excluded:
+            manual_excluded_report_path = confirmer.export_report(
+                run_id, manual_excluded, kind="manual_excluded"
+            )
+            result.manual_excluded_report_path = str(manual_excluded_report_path)
 
         screenshot_paths.append(confirmer.screenshot(f"{run_id}_inventory.png"))
 
         result.total_amount_yen = validate_selection_expectations(
             records,
             expected_count=expected_count,
-            expected_total_amount_yen=expected_total_amount_yen,
+            expected_total_amount_yen=None if execute else expected_total_amount_yen,
+            allow_amount_recalculation=bool(fee_burden_changed_records),
         )
 
         # Rerun safety: if same exact selection was already confirmed, stop.
@@ -1078,6 +1241,7 @@ def run_payment_confirm(
                 **asdict(result),
                 "selected_slip_nos": [r.slip_no for r in records],
                 "anomaly_slip_nos": [r.slip_no for r in anomalies],
+                "manual_excluded_slip_nos": [r.slip_no for r in manual_excluded],
                 "screenshot_paths": [str(p) for p in screenshot_paths],
             }
             _write_json(result_json_path, report_payload)
@@ -1091,17 +1255,13 @@ def run_payment_confirm(
                 "inventory_records": result.inventory_records,
                 "selected_records": result.selected_records,
                 "anomaly_records": result.anomaly_records,
+                "manual_excluded_records": result.manual_excluded_records,
                 "at": datetime.now().isoformat(timespec="seconds"),
             }
             _append_jsonl(ledger_path, ledger_entry)
             _append_jsonl(ledger_excerpt_path, ledger_entry)
             return result
 
-        if not bank_transfer_confirmed:
-            raise RuntimeError(
-                "確認ゲート: 銀行振込完了の確認フラグがありません。"
-                " --bank-transfer-confirmed を付けずに確定OKは押せません。"
-            )
         if expected_count is None:
             raise RuntimeError(
                 "確認ゲート: --expected-count が未指定です。銀行側の件数照合なしで確定OKは押せません。"
@@ -1118,6 +1278,11 @@ def run_payment_confirm(
             )
         if len(records) == 0:
             raise RuntimeError("確認ゲート: 自動選択候補が0件のため execute は実行しません")
+        if not confirm_preview and not bank_transfer_confirmed:
+            raise RuntimeError(
+                "確認ゲート: 銀行振込完了の確認フラグがありません。"
+                " --bank-transfer-confirmed を付けずに確定OKは押せません。"
+            )
 
         confirmer.check_selected_slips(records)
         screenshot_paths.append(confirmer.screenshot(f"{run_id}_selected.png"))
@@ -1157,16 +1322,46 @@ def run_payment_confirm(
                 f"確認ダイアログ不一致: 支払日 expected='{payment_date}' actual='{modal_date}'"
             )
 
-        expected_total_amount = sum(r.amount_yen or 0 for r in records)
         total_amount_raw = (modal_info.get("total_amount_raw") or "").strip()
         if not total_amount_raw:
             raise RuntimeError("確認ダイアログから支払額の合計を取得できません")
         result.total_amount_yen = _parse_int_yen(total_amount_raw)
-        if result.total_amount_yen != expected_total_amount:
+        if expected_total_amount_yen is not None and result.total_amount_yen != expected_total_amount_yen:
             raise RuntimeError(
-                "確認ダイアログ不一致: "
-                f"支払額の合計 expected='{expected_total_amount}' actual='{result.total_amount_yen}'"
+                "確認ゲート: 確認ダイアログの支払額合計が銀行側/確認資料の合計金額と一致しません。"
+                f" expected={expected_total_amount_yen}, actual={result.total_amount_yen}"
             )
+
+        if confirm_preview:
+            modal_payload = {k: v for k, v in modal_info.items() if k != "modal"}
+            result.status = "confirm_preview"
+            result.ended_at = datetime.now().isoformat(timespec="seconds")
+            report_payload = {
+                **asdict(result),
+                "selected_slip_nos": [r.slip_no for r in records],
+                "anomaly_slip_nos": [r.slip_no for r in anomalies],
+                "manual_excluded_slip_nos": [r.slip_no for r in manual_excluded],
+                "modal_info": modal_payload,
+                "screenshot_paths": [str(p) for p in screenshot_paths],
+            }
+            _write_json(result_json_path, report_payload)
+            _write_json(summary_json_path, asdict(result))
+            ledger_entry = {
+                "schema_version": 1,
+                "environment": env_name.upper(),
+                "run_id": run_id,
+                "run_key": run_key,
+                "status": "confirm_preview",
+                "inventory_records": result.inventory_records,
+                "selected_records": result.selected_records,
+                "anomaly_records": result.anomaly_records,
+                "manual_excluded_records": result.manual_excluded_records,
+                "total_amount_yen": result.total_amount_yen,
+                "at": datetime.now().isoformat(timespec="seconds"),
+            }
+            _append_jsonl(ledger_path, ledger_entry)
+            _append_jsonl(ledger_excerpt_path, ledger_entry)
+            return result
 
         confirmer.click_modal_ok(modal)
 
@@ -1190,10 +1385,11 @@ def run_payment_confirm(
         result.ended_at = datetime.now().isoformat(timespec="seconds")
         report_payload = {
             **asdict(result),
-            "selected_slip_nos": [r.slip_no for r in records],
-            "anomaly_slip_nos": [r.slip_no for r in anomalies],
-            "screenshot_paths": [str(p) for p in screenshot_paths],
-        }
+                "selected_slip_nos": [r.slip_no for r in records],
+                "anomaly_slip_nos": [r.slip_no for r in anomalies],
+                "manual_excluded_slip_nos": [r.slip_no for r in manual_excluded],
+                "screenshot_paths": [str(p) for p in screenshot_paths],
+            }
         _write_json(result_json_path, report_payload)
         _write_json(summary_json_path, asdict(result))
         ledger_entry = {
@@ -1211,6 +1407,74 @@ def run_payment_confirm(
         _append_jsonl(ledger_path, ledger_entry)
         _append_jsonl(ledger_excerpt_path, ledger_entry)
 
+        return result
+
+    except NoTargetRecordsError as e:
+        result.ended_at = datetime.now().isoformat(timespec="seconds")
+        recent_dates = _recent_artifact_payment_dates(artifact_root)
+        try:
+            if confirmer.page:
+                screenshot_paths.append(confirmer.screenshot(f"{run_id}_no_target.png"))
+        except Exception:
+            pass
+
+        if execute or confirm_preview:
+            result.status = "failed"
+            result.error = f"{type(e).__name__}: {e}"
+            report_payload = {
+                **asdict(result),
+                "no_target_reason": str(e),
+                "recent_candidate_payment_dates": recent_dates,
+                "screenshot_paths": [str(p) for p in screenshot_paths],
+            }
+            _write_json(result_json_path, report_payload)
+            _write_json(summary_json_path, asdict(result))
+            ledger_entry = {
+                "schema_version": 1,
+                "environment": env_name.upper(),
+                "run_id": run_id,
+                "status": "failed",
+                "error": result.error,
+                "at": result.ended_at,
+            }
+            _append_jsonl(ledger_path, ledger_entry)
+            _append_jsonl(ledger_excerpt_path, ledger_entry)
+            raise
+
+        result.status = "dry_run_no_target"
+        result.error = None
+        result.inventory_records = 0
+        result.selected_records = 0
+        result.anomaly_records = 0
+        result.manual_excluded_records = 0
+        result.total_amount_yen = 0
+        report_payload = {
+            **asdict(result),
+            "no_target_reason": str(e),
+            "recent_candidate_payment_dates": recent_dates,
+            "selected_slip_nos": [],
+            "anomaly_slip_nos": [],
+            "manual_excluded_slip_nos": [],
+            "screenshot_paths": [str(p) for p in screenshot_paths],
+        }
+        _write_json(result_json_path, report_payload)
+        _write_json(summary_json_path, asdict(result))
+        ledger_entry = {
+            "schema_version": 1,
+            "environment": env_name.upper(),
+            "run_id": run_id,
+            "run_key": _make_run_key(payment_date, transfer_source, []),
+            "status": "dry_run_no_target",
+            "inventory_records": 0,
+            "selected_records": 0,
+            "anomaly_records": 0,
+            "manual_excluded_records": 0,
+            "no_target_reason": str(e),
+            "recent_candidate_payment_dates": recent_dates,
+            "at": result.ended_at,
+        }
+        _append_jsonl(ledger_path, ledger_entry)
+        _append_jsonl(ledger_excerpt_path, ledger_entry)
         return result
 
     except Exception as e:
@@ -1270,6 +1534,8 @@ def send_result_email(
             f"inventory_records: {result.inventory_records}",
             f"selected_records: {result.selected_records}",
             f"anomaly_records: {result.anomaly_records}",
+            f"manual_excluded_records: {result.manual_excluded_records}",
+            f"fee_burden_changed_records: {result.fee_burden_changed_records}",
             "dry-run detected anomalies before confirmation. "
             "Please review the anomaly CSV and correct Rakuraku data before rerun.",
         ]
@@ -1286,6 +1552,11 @@ def send_result_email(
             paragraphs.append(
                 f"anomaly_csv: {html_link_to_path(Path(result.anomaly_report_path), label=result.anomaly_report_path)}"
             )
+        if result.manual_excluded_report_path:
+            paragraphs.append(
+                "manual_excluded_csv: "
+                f"{html_link_to_path(Path(result.manual_excluded_report_path), label=result.manual_excluded_report_path)}"
+            )
         if screenshot_paths:
             paragraphs.append("screenshots:")
             paragraphs.append("<pre>" + "\n".join([str(p) for p in screenshot_paths]) + "</pre>")
@@ -1294,7 +1565,7 @@ def send_result_email(
             title="scenario70 dry-run anomaly detected",
             paragraphs=paragraphs,
         )
-        send_outlook(
+        _send_outlook_if_recipient_exists(
             OutlookEmail(
                 to=MAIL_TO_ERROR,
                 cc=MAIL_CC_ERROR,
@@ -1332,6 +1603,8 @@ def send_result_email(
                 f"inventory件数: {result.inventory_records}",
                 f"選択件数: {result.selected_records}",
                 f"異常候補件数: {result.anomaly_records}",
+                f"担当者手動対象外件数: {result.manual_excluded_records}",
+                f"手数料区分変更件数: {result.fee_burden_changed_records}",
                 f"レポート: {report_link}" if report_link else "レポート: (未出力)",
                 (
                     f"選択候補CSV: {html_link_to_path(Path(result.selected_report_path), label=result.selected_report_path)}"
@@ -1343,10 +1616,15 @@ def send_result_email(
                     if result.anomaly_report_path
                     else "異常候補CSV: なし"
                 ),
+                (
+                    f"担当者手動対象外CSV: {html_link_to_path(Path(result.manual_excluded_report_path), label=result.manual_excluded_report_path)}"
+                    if result.manual_excluded_report_path
+                    else "担当者手動対象外CSV: なし"
+                ),
             ],
             bullets=bullets or None,
         )
-        send_outlook(
+        _send_outlook_if_recipient_exists(
             OutlookEmail(
                 to=MAIL_TO_SUCCESS,
                 subject=subject,
@@ -1365,6 +1643,8 @@ def send_result_email(
         f"支払日(申請): {result.payment_date}",
         f"所属部門: {result.department_code}",
         f"振込元: {result.transfer_source}",
+        f"手数料区分変更件数: {result.fee_burden_changed_records}",
+        f"担当者手動対象外件数: {result.manual_excluded_records}",
         f"エラー: {result.error}",
     ]
     if result.report_path:
@@ -1377,6 +1657,10 @@ def send_result_email(
         paragraphs.append(
             f"異常候補CSV: {html_link_to_path(Path(result.anomaly_report_path), label=result.anomaly_report_path)}"
         )
+    if result.manual_excluded_report_path:
+        paragraphs.append(
+            f"担当者手動対象外CSV: {html_link_to_path(Path(result.manual_excluded_report_path), label=result.manual_excluded_report_path)}"
+        )
     if screenshot_paths:
         paragraphs.append("スクショ:")
         paragraphs.append("<pre>" + "\n".join([str(p) for p in screenshot_paths]) + "</pre>")
@@ -1385,7 +1669,7 @@ def send_result_email(
         title="楽楽精算 支払確定（支払先） エラー通知",
         paragraphs=paragraphs,
     )
-    send_outlook(
+    _send_outlook_if_recipient_exists(
         OutlookEmail(
             to=MAIL_TO_ERROR,
             cc=MAIL_CC_ERROR,
@@ -1394,6 +1678,36 @@ def send_result_email(
         ),
         dry_run=dry_run_mail,
     )
+
+
+def _filter_mail_addresses_for_env(addresses: Sequence[str], env_name: str) -> list[str]:
+    """LOCALでは管理部共有メールへ送らない。"""
+    filtered = [addr for addr in addresses if addr and addr.strip()]
+    if env_name.strip().upper() != "LOCAL":
+        return filtered
+    blocked = {KANRI_MAIL_ADDRESS.lower()}
+    return [addr for addr in filtered if addr.strip().lower() not in blocked]
+
+
+def _apply_mail_config(config: dict[str, str], env_name: str) -> None:
+    global MAIL_TO_SUCCESS, MAIL_TO_ERROR, MAIL_CC_ERROR
+    if "MAIL_TO_SUCCESS" in config:
+        MAIL_TO_SUCCESS = split_mail_list(config["MAIL_TO_SUCCESS"])
+    if "MAIL_TO_ERROR" in config:
+        MAIL_TO_ERROR = split_mail_list(config["MAIL_TO_ERROR"])
+    if "MAIL_CC_ERROR" in config:
+        MAIL_CC_ERROR = split_mail_list(config["MAIL_CC_ERROR"])
+
+    MAIL_TO_SUCCESS = _filter_mail_addresses_for_env(MAIL_TO_SUCCESS, env_name)
+    MAIL_TO_ERROR = _filter_mail_addresses_for_env(MAIL_TO_ERROR, env_name)
+    MAIL_CC_ERROR = _filter_mail_addresses_for_env(MAIL_CC_ERROR, env_name)
+
+
+def _send_outlook_if_recipient_exists(email: OutlookEmail, *, dry_run: bool) -> None:
+    if not list(email.to or []) and not list(email.cc or []):
+        print("INFO: scenario70 email skipped because no recipients are configured.")
+        return
+    send_outlook(email, dry_run=dry_run)
 
 
 def main() -> int:
@@ -1407,6 +1721,11 @@ def main() -> int:
     parser.add_argument("--artifact-dir", default=None, help="成果物出力先ディレクトリ（フルパス）")
     parser.add_argument("--headless", action="store_true", help="ヘッドレス（非推奨）")
     parser.add_argument("--execute", action="store_true", help="確認ダイアログのOKを押して支払確定まで実行する")
+    parser.add_argument(
+        "--confirm-preview",
+        action="store_true",
+        help="対象選択と確認ダイアログ表示まで進み、最終OKは押さずに停止する",
+    )
     parser.add_argument("--expected-count", type=int, default=None, help="銀行側/確認資料と一致すべき対象件数")
     parser.add_argument("--expected-total-amount", default=None, help="銀行側/確認資料と一致すべき合計金額（例: 1,234,567）")
     parser.add_argument(
@@ -1431,13 +1750,7 @@ def main() -> int:
         except FileNotFoundError:
             config = {"ENV": env_name, "CONFIG_DIR": str(config_dir)}
 
-    global MAIL_TO_SUCCESS, MAIL_TO_ERROR, MAIL_CC_ERROR
-    if config.get("MAIL_TO_SUCCESS"):
-        MAIL_TO_SUCCESS = split_mail_list(config["MAIL_TO_SUCCESS"])
-    if config.get("MAIL_TO_ERROR"):
-        MAIL_TO_ERROR = split_mail_list(config["MAIL_TO_ERROR"])
-    if config.get("MAIL_CC_ERROR"):
-        MAIL_CC_ERROR = split_mail_list(config["MAIL_CC_ERROR"])
+    _apply_mail_config(config, env_name)
 
     payment_date = _normalize_payment_date(args.payment_date)
     base_url = (args.base_url or config.get("BASE_URL") or DEFAULT_BASE_URL).strip()
@@ -1465,7 +1778,8 @@ def main() -> int:
             payment_date=payment_date,
             transfer_source=transfer_source,
             artifact_root=artifact_root,
-            execute=bool(args.execute),
+            execute=bool(args.execute or args.confirm_preview),
+            confirm_preview=bool(args.confirm_preview),
             expected_count=args.expected_count,
             expected_total_amount_yen=expected_total_amount_yen,
             bank_transfer_confirmed=bool(args.bank_transfer_confirmed),
@@ -1484,7 +1798,7 @@ def main() -> int:
                 print("Warning: dry-run anomaly email failed to send.")
         # In current implementation, slip list is saved in CSV; email slip_nos list is optional.
         # If needed, we can re-read CSV here.
-        return 0 if result.status in ("success", "dry_run") else 1
+        return 0 if result.status in ("success", "dry_run", "dry_run_no_target", "confirm_preview") else 1
 
     except Exception as exc:
         # Send error email with traceback summary.

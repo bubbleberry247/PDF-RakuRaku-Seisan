@@ -105,7 +105,7 @@ class TestRakurakuPaymentConfirm(unittest.TestCase):
 
     def test_classify_slip_record_marks_partner_fee_as_anomaly(self) -> None:
         record = MODULE.parse_slip_block_texts(  # type: ignore[attr-defined]
-            row1_text="00011453\n東海インプル建設株式会社\n瀬戸　阿紀子\n2025/01/05\n2025/01/06\n392\n2025/01/14\n保存不要",
+            row1_text="00011453\n東海インプル建設株式会社\n瀬戸　阿紀子\n2025/01/05\n2025/01/06\n1,392\n2025/01/14\n保存不要",
             row2_text="東海建物管理株式会社",
             row3_text="TOCOビル 3F-B(ガス料金) 12月分\n先方負担",
             checkbox_name="kakutei(11418)",
@@ -119,7 +119,26 @@ class TestRakurakuPaymentConfirm(unittest.TestCase):
         self.assertEqual(classified.decision, "anomaly")
         self.assertEqual(classified.decision_reason, "non_company_fee_burden")
 
-    def test_classify_slip_record_rejects_non_bulk_transfer(self) -> None:
+    def test_mark_company_fee_burden_allows_partner_fee_selection(self) -> None:
+        record = MODULE.parse_slip_block_texts(  # type: ignore[attr-defined]
+            row1_text="00011453\n東海インプル建設株式会社\n瀬戸　阿紀子\n2025/01/05\n2025/01/06\n1,392\n2025/01/14\n保存不要",
+            row2_text="東海建物管理株式会社",
+            row3_text="TOCOビル 3F-B(ガス料金) 12月分\n先方負担",
+            checkbox_name="kakutei(11418)",
+            page_no=1,
+            row_group_index=2,
+        )
+        record = replace(record, payment_method="総合振込", payment_method_source="detail_view")
+
+        updated = MODULE._mark_company_fee_burden(record, applied=True)  # type: ignore[attr-defined]
+        classified = MODULE.classify_slip_record(updated, "2025/01/14")  # type: ignore[attr-defined]
+
+        self.assertEqual(updated.fee_burden_before, "先方負担")
+        self.assertEqual(updated.fee_burden, "当方負担")
+        self.assertEqual(updated.fee_burden_action, "changed_to_company_fee")
+        self.assertEqual(classified.decision, "selected")
+
+    def test_classify_slip_record_marks_non_bulk_transfer_as_manual_excluded(self) -> None:
         record = MODULE.parse_slip_block_texts(  # type: ignore[attr-defined]
             row1_text="00016110\n東海インプル建設株式会社\n瀬戸　阿紀子\n2025/10/01\n2025/10/02\n1,000\n2025/10/31\n保存不要",
             row2_text="三菱ＨＣキャピタル株式会社",
@@ -132,8 +151,8 @@ class TestRakurakuPaymentConfirm(unittest.TestCase):
 
         classified = MODULE.classify_slip_record(record, "2025/10/31")  # type: ignore[attr-defined]
 
-        self.assertEqual(classified.decision, "anomaly")
-        self.assertEqual(classified.decision_reason, "non_bulk_transfer")
+        self.assertEqual(classified.decision, "manual_excluded")
+        self.assertEqual(classified.decision_reason, "manual_payment_method")
 
     def test_detect_detail_payment_method_reads_labeled_value(self) -> None:
         method = MODULE._detect_detail_payment_method(  # type: ignore[attr-defined]
@@ -176,3 +195,64 @@ class TestRakurakuPaymentConfirm(unittest.TestCase):
                 expected_count=1,
                 expected_total_amount_yen=999,
             )
+
+    def test_validate_selection_expectations_can_defer_amount_when_fee_changes(self) -> None:
+        record = MODULE.parse_slip_block_texts(  # type: ignore[attr-defined]
+            row1_text="00011453\n東海インプル建設株式会社\n瀬戸　阿紀子\n2025/01/05\n2025/01/06\n1,392\n2025/01/14\n保存不要",
+            row2_text="東海建物管理株式会社",
+            row3_text="TOCOビル 3F-B(ガス料金) 12月分\n先方負担",
+            checkbox_name="kakutei(11418)",
+            page_no=1,
+            row_group_index=2,
+        )
+
+        total = MODULE.validate_selection_expectations(  # type: ignore[attr-defined]
+            [record],
+            expected_count=1,
+            expected_total_amount_yen=999,
+            allow_amount_recalculation=True,
+        )
+
+        self.assertEqual(total, 1392)
+
+    def test_local_mail_filter_removes_kanri_address(self) -> None:
+        filtered = MODULE._filter_mail_addresses_for_env(  # type: ignore[attr-defined]
+            ["kanri.tic@tokai-ic.co.jp", "kalimistk@gmail.com"],
+            "LOCAL",
+        )
+
+        self.assertEqual(filtered, ["kalimistk@gmail.com"])
+
+    def test_prod_mail_filter_keeps_kanri_address(self) -> None:
+        filtered = MODULE._filter_mail_addresses_for_env(  # type: ignore[attr-defined]
+            ["kanri.tic@tokai-ic.co.jp"],
+            "PROD",
+        )
+
+        self.assertEqual(filtered, ["kanri.tic@tokai-ic.co.jp"])
+
+    def test_apply_mail_config_allows_blank_cc_in_local(self) -> None:
+        original = (
+            list(MODULE.MAIL_TO_SUCCESS),
+            list(MODULE.MAIL_TO_ERROR),
+            list(MODULE.MAIL_CC_ERROR),
+        )
+        try:
+            MODULE.MAIL_TO_SUCCESS = ["kanri.tic@tokai-ic.co.jp"]
+            MODULE.MAIL_TO_ERROR = ["kanri.tic@tokai-ic.co.jp"]
+            MODULE.MAIL_CC_ERROR = ["kalimistk@gmail.com"]
+
+            MODULE._apply_mail_config(  # type: ignore[attr-defined]
+                {
+                    "MAIL_TO_SUCCESS": "kalimistk@gmail.com",
+                    "MAIL_TO_ERROR": "kalimistk@gmail.com",
+                    "MAIL_CC_ERROR": "",
+                },
+                "LOCAL",
+            )
+
+            self.assertEqual(MODULE.MAIL_TO_SUCCESS, ["kalimistk@gmail.com"])
+            self.assertEqual(MODULE.MAIL_TO_ERROR, ["kalimistk@gmail.com"])
+            self.assertEqual(MODULE.MAIL_CC_ERROR, [])
+        finally:
+            MODULE.MAIL_TO_SUCCESS, MODULE.MAIL_TO_ERROR, MODULE.MAIL_CC_ERROR = original

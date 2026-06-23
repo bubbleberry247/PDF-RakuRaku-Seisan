@@ -12,6 +12,9 @@ Output columns:
 - キーワード
 - 部署
 - status
+
+Use --template-master when the current production project_master has extra
+columns that must be preserved as a drop-in replacement.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from unicodedata import normalize
 import openpyxl
 
 
+NORMALIZED_HEADERS = ("工事番号", "工事名称", "キーワード", "部署", "status")
 DEFAULT_NUMBER_COLUMNS = ("工事番号", "工事No", "案件番号", "番号", "物件番号")
 DEFAULT_NAME_COLUMNS = ("工事名称", "現場名", "案件名", "物件名", "工事名")
 DEFAULT_BUSHO_COLUMNS = ("部署", "部署コード", "工事区分", "区分")
@@ -99,6 +103,19 @@ def _iter_source_rows(path: Path, sheet_name: str | None) -> tuple[list[str], li
         headers = list(reader.fieldnames or [])
         rows = [{header: _stringify(value) for header, value in row.items()} for row in reader]
     return headers, rows
+
+
+def _iter_xlsx_table(path: Path, sheet_name: str | None = None) -> tuple[list[str], list[dict[str, object]]]:
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        ws = wb[sheet_name] if sheet_name else wb.active
+        headers = [_stringify(cell.value) for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+        rows: list[dict[str, object]] = []
+        for values in ws.iter_rows(min_row=2, values_only=True):
+            rows.append({headers[idx]: value for idx, value in enumerate(values) if idx < len(headers)})
+        return headers, rows
+    finally:
+        wb.close()
 
 
 def _resolve_column(
@@ -182,12 +199,77 @@ def _write_output(path: Path, rows: list[tuple[str, str, str, str, str]]) -> Non
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "project_master"
-    ws.append(["工事番号", "工事名称", "キーワード", "部署", "status"])
+    ws.append(list(NORMALIZED_HEADERS))
     for row in rows:
         ws.append(list(row))
     path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(path)
     wb.close()
+
+
+def _blank(value: object) -> bool:
+    return value is None or _stringify(value) == ""
+
+
+def _write_template_output(
+    path: Path,
+    rows: list[tuple[str, str, str, str, str]],
+    *,
+    template_master: Path,
+    source_rows: list[dict[str, str]],
+    source_number_column: str | None,
+    source_label: str,
+) -> tuple[int, int, int]:
+    headers, template_rows = _iter_xlsx_table(template_master)
+    missing = [header for header in NORMALIZED_HEADERS if header not in headers]
+    if missing:
+        raise ValueError(
+            f"template master missing required columns: {', '.join(missing)}"
+        )
+
+    template_by_number = {
+        _stringify(row.get("工事番号")): row
+        for row in template_rows
+        if _stringify(row.get("工事番号"))
+    }
+    source_by_number = {}
+    if source_number_column:
+        source_by_number = {
+            _stringify(row.get(source_number_column)): row
+            for row in source_rows
+            if _stringify(row.get(source_number_column))
+        }
+
+    output_rows: list[dict[str, object]] = []
+    matched_template_rows = 0
+    for normalized_row in rows:
+        normalized = dict(zip(NORMALIZED_HEADERS, normalized_row))
+        number = _stringify(normalized.get("工事番号"))
+        template = template_by_number.get(number, {})
+        source = source_by_number.get(number, {})
+        if template:
+            matched_template_rows += 1
+        output = {header: template.get(header, "") for header in headers}
+        if not template:
+            for header in headers:
+                if _blank(output.get(header)) and header in source:
+                    output[header] = source[header]
+        for header in NORMALIZED_HEADERS:
+            output[header] = normalized[header]
+        if "source" in headers and _blank(output.get("source")):
+            output["source"] = f"export:{source_label}"
+        output_rows.append(output)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "project_master"
+    ws.append(headers)
+    for row in output_rows:
+        ws.append([row.get(header, "") for header in headers])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(path)
+    wb.close()
+    return len(output_rows), len(headers), matched_template_rows
 
 
 def _load_master_rows(path: Path) -> list[dict[str, str]]:
@@ -218,6 +300,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mapping-json", default=None, help="JSON file with column/value mapping")
     ap.add_argument("--list-columns", action="store_true", help="Print source headers and exit")
     ap.add_argument("--base-master", default=None, help="Existing normalized project_master xlsx to inherit by 工事番号")
+    ap.add_argument(
+        "--template-master",
+        default=None,
+        help="Existing production project_master xlsx whose headers and extra fields are preserved in the output",
+    )
     ap.add_argument(
         "--infer-busho-from-name",
         action="store_true",
@@ -389,14 +476,31 @@ def main(argv: list[str] | None = None) -> int:
                 item["status"],
             )
         )
-    _write_output(output, rows)
+    template_message = ""
+    if args.template_master:
+        output_row_count, output_col_count, matched_template_rows = _write_template_output(
+            output,
+            rows,
+            template_master=Path(args.template_master),
+            source_rows=source_rows,
+            source_number_column=number_col,
+            source_label=src.name,
+        )
+        template_message = (
+            f", template_master={args.template_master}, "
+            f"output_columns={output_col_count}, "
+            f"matched_template_rows={matched_template_rows}/{output_row_count}"
+        )
+    else:
+        _write_output(output, rows)
     print(
         f"wrote {len(rows)} rows to {output} "
         f"(unknown_busho={unknown_busho}, "
         f"explicit_busho={explicit_busho}, inferred_busho={inferred_busho}, "
         f"inherited_from_base={inherited_count}, carried_base_only={carried_from_base_only}, "
         f"number_column={number_col or '-'}, name_column={name_col}, "
-        f"busho_column={busho_col or '-'}, keyword_columns={','.join(keyword_cols) or '-'})"
+        f"busho_column={busho_col or '-'}, keyword_columns={','.join(keyword_cols) or '-'}"
+        f"{template_message})"
     )
     return 0
 
