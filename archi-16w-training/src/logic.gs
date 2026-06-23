@@ -270,6 +270,44 @@ function buildProgress_(attempts, totalTests, tz, weeksBack) {
     }
   });
   var submittedUniqueCount = Object.keys(submittedMap).length;
+
+  // Per-test completion detail (for 受講完了表 dashboard grid + CSV export)
+  var submitCountByTest = {};
+  var latestByTest = {};
+  var latestCompareByTest = {};
+  submittedTests.forEach(function(a) {
+    if (a.testIndex === '' || a.testIndex === null || a.testIndex === undefined) return;
+    var testIndex = String(a.testIndex);
+    submitCountByTest[testIndex] = (submitCountByTest[testIndex] || 0) + 1;
+    var totalQuestionsForAttempt = Number(a.totalQuestions || 0);
+    var latestScorePct = totalQuestionsForAttempt > 0
+      ? Math.round(Number(a.scoreTotal || 0) / totalQuestionsForAttempt * 1000) / 10
+      : 0;
+    var submittedAtRaw = a.submittedAt || a.startedAt || '';
+    var submittedAtDate = parseTimestamp_(submittedAtRaw);
+    var submittedAt = submittedAtDate ? formatDateTime_(submittedAtDate, tz) : String(submittedAtRaw || '');
+    var compareKey = submittedAtDate ? submittedAtDate.getTime() : submittedAt;
+    var previousKey = latestCompareByTest[testIndex];
+    var isNewer = previousKey === undefined || (
+      typeof compareKey === 'number' && typeof previousKey === 'number'
+        ? compareKey > previousKey
+        : String(compareKey) > String(previousKey)
+    );
+    if (isNewer) {
+      latestCompareByTest[testIndex] = compareKey;
+      latestByTest[testIndex] = { lastSubmittedAt: submittedAt, latestScorePct: latestScorePct };
+    }
+  });
+  var completedByTest = {};
+  Object.keys(submittedMap).forEach(function(testIndex) {
+    completedByTest[testIndex] = {
+      completed: true,
+      lastSubmittedAt: latestByTest[testIndex] ? latestByTest[testIndex].lastSubmittedAt : '',
+      latestScorePct: latestByTest[testIndex] ? latestByTest[testIndex].latestScorePct : 0,
+      submitCount: submitCountByTest[testIndex] || 0
+    };
+  });
+
   var avgScore = 0;
   if (submittedTests.length > 0) {
     var sum = 0;
@@ -294,7 +332,8 @@ function buildProgress_(attempts, totalTests, tz, weeksBack) {
     totalTests: totalTests,
     avgScore: avgScore,
     last7DaysCount: last7DaysCount,
-    weekly: weekly
+    weekly: weekly,
+    completedByTest: completedByTest
   };
 }
 

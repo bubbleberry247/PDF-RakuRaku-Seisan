@@ -1643,8 +1643,291 @@
       setHtml('home-recent', table);
     }
 
+    // ─── 受講回別完了表（ダッシュボード進捗グリッド + CSV + A4印刷） ───
+    var _teamData_ = [];  // CSV/印刷用グローバルキャッシュ
+
+    function getCompletionColumns_(list) {
+      var unlocked = (state.home && state.home.unlocked) || [];
+      if (unlocked.length > 0) {
+        return unlocked.map(function(t, idx) {
+          return {
+            testIndex: t.testIndex !== undefined && t.testIndex !== null && t.testIndex !== '' ? t.testIndex : (idx + 1),
+            label: '第' + (idx + 1) + '回',
+            unlockWeek: t.unlockWeek !== undefined && t.unlockWeek !== null && t.unlockWeek !== '' ? t.unlockWeek : (idx + 1),
+            recommended: !!t.recommended
+          };
+        });
+      }
+      var total = 0;
+      (list || []).forEach(function(t) {
+        var p = t.progress || {};
+        total = Math.max(total, Number(p.totalTests || 0));
+        Object.keys(p.completedByTest || {}).forEach(function(k) {
+          var n = Number(k);
+          if (n > total) total = n;
+        });
+      });
+      if (!(total > 0)) total = 16;
+      var cols = [];
+      for (var i = 1; i <= total; i++) {
+        cols.push({ testIndex: i, label: '第' + i + '回', unlockWeek: i, recommended: false });
+      }
+      return cols;
+    }
+
+    function getCompletionDateRange_(col, idx, total) {
+      try {
+        var examDateCfg = (state.home && state.home.config && (state.home.config.EXAM_DATE || state.home.config.EXAM_DATE_STR)) || '';
+        return getWeekDateRange(idx + 1, examDateCfg, total) || '';
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function formatCompletionDateRangeText_(range) {
+      return String(range || '')
+        .replace(/月/g, '/')
+        .replace(/日/g, '')
+        .replace(/[〜–]/g, '~')
+        .replace(/\s+/g, '');
+    }
+
+    function getCompletionBasisCount_(cols) {
+      var basis = cols.length;
+      cols.forEach(function(c, idx) {
+        if (c.recommended && basis === cols.length) basis = idx + 1;
+      });
+      return basis;
+    }
+
+    function getCompletionStats_(member, cols, basisCount) {
+      var cbt = (member.progress && member.progress.completedByTest) || {};
+      var done = 0;
+      var basisDone = 0;
+      cols.forEach(function(c, idx) {
+        var rec = cbt[String(c.testIndex)];
+        if (rec && rec.completed) {
+          done++;
+          if (idx < basisCount) basisDone++;
+        }
+      });
+      return {
+        done: done,
+        totalPct: cols.length > 0 ? Math.round(done / cols.length * 100) : 0,
+        basisPct: basisCount > 0 ? Math.round(basisDone / basisCount * 100) : 0
+      };
+    }
+
+    function buildCompletionMatrix_(list) {
+      var cols = getCompletionColumns_(list);
+      var weekCount = cols.length;
+      var basisCount = getCompletionBasisCount_(cols);
+      var currentIdx = -1;
+      cols.forEach(function(c, idx) {
+        if (c.recommended && currentIdx === -1) currentIdx = idx;
+      });
+      var appLabel = '建築';
+      var sectionBg = '#6aa84f';
+      var sectionDark = '#38761d';
+      var nameBg = '#fff6a5';
+      var gridBorder = '1px dotted #6b7280';
+      var futureStart = currentIdx >= 0 ? currentIdx + 1 : weekCount;
+      var qCount = '';
+      try { qCount = String((state.home && state.home.config && state.home.config.QUESTIONS_PER_TEST) || '20'); } catch (e) { qCount = '20'; }
+      function currentColStyle(idx) { return ''; }
+      function progressColStyle(isBasis) { return ''; }
+      var dateHeaderCells = '';
+      var weekHeaderCells = '';
+      cols.forEach(function(c, idx) {
+        var range = formatCompletionDateRangeText_(getCompletionDateRange_(c, idx, weekCount));
+        dateHeaderCells += '<th style="min-width:62px;padding:3px 4px;font-size:0.68rem;font-weight:500;white-space:nowrap;text-align:center;background:#fff;border:' + gridBorder + ';color:#111827;' + currentColStyle(idx) + '">' + escapeHtml(range) + '</th>';
+        weekHeaderCells += '<th style="min-width:58px;padding:5px 4px;font-size:0.78rem;font-weight:800;white-space:nowrap;text-align:center;background:' + sectionBg + ';border:' + gridBorder + ';color:#fff;' + currentColStyle(idx) + '">' + escapeHtml(c.label || ('第' + (idx + 1) + '回')) + '</th>';
+      });
+
+      var avgPlaceholder_ = '__AVG__';
+      var perfectPlaceholder_ = '__PERFECT__';
+      var topSummaryCells = '';
+      cols.forEach(function(c, idx) {
+        var pos = idx - Math.max(0, weekCount - 4);
+        if (pos === 0) {
+          topSummaryCells += '<td style="background:#ffd7d7;border:1px solid #e5e7eb;text-align:center;font-size:0.75rem;font-weight:700;white-space:nowrap;min-width:96px">全体平均進捗</td>';
+        } else if (pos === 1) {
+          topSummaryCells += '<td style="background:#ff9b9b;border:1px solid #e5e7eb;text-align:center;font-size:0.78rem;font-weight:800;white-space:nowrap;min-width:56px">' + avgPlaceholder_ + '%</td>';
+        } else if (pos === 2) {
+          topSummaryCells += '<td style="background:#ffd7d7;border:1px solid #e5e7eb;text-align:center;font-size:0.75rem;font-weight:700;white-space:nowrap;min-width:100px">100%達成人数</td>';
+        } else if (pos === 3) {
+          topSummaryCells += '<td style="background:#ff9b9b;border:1px solid #e5e7eb;text-align:center;font-size:0.78rem;font-weight:800;white-space:nowrap;min-width:56px">' + perfectPlaceholder_ + '名</td>';
+        } else {
+          topSummaryCells += '<td style="background:#fff;border:1px solid #e5e7eb"></td>';
+        }
+      });
+
+      var rows = list.map(function(t) {
+        var name = escapeHtml(t.displayName || t.email || '');
+        var cbt = (t.progress && t.progress.completedByTest) || {};
+        var cells = '';
+        cols.forEach(function(c, idx) {
+          var rec = cbt[String(c.testIndex)];
+          var done = !!(rec && rec.completed);
+          var title = '';
+          if (done) {
+            var score = Number(rec.latestScorePct || 0);
+            title = ' title="' + escapeHtml(String(rec.lastSubmittedAt || '') + ' / ' + score.toFixed(1) + '% / 提出' + Number(rec.submitCount || 0) + '回') + '"';
+          }
+          var cellBg = idx >= futureStart ? '#f3f4f6' : '#f4fbef';
+          if (idx === currentIdx) cellBg = '#fffdf0';
+          cells += '<td style="height:24px;min-width:58px;padding:2px 4px;text-align:center;font-size:0.95rem;color:#2f557f;font-weight:800;border:' + gridBorder + ';background:' + cellBg + ';' + currentColStyle(idx) + '"' + title + '>' + (done ? '○' : '') + '</td>';
+        });
+        var stats = getCompletionStats_(t, cols, basisCount);
+        var basisColor = stats.basisPct >= 100 ? '#10b981' : stats.basisPct >= 70 ? '#0ea5e9' : '#ef4444';
+        return '<tr>' +
+          '<td style="position:sticky;left:0;z-index:1;height:24px;padding:3px 6px;font-size:0.8rem;font-weight:700;color:#111827;border:' + gridBorder + ';background:' + nameBg + ';white-space:nowrap;text-align:left">' + name + '</td>' +
+          cells +
+          '<td style="padding:3px 6px;text-align:center;font-size:0.8rem;font-weight:700;border:' + gridBorder + ';background:#fff;color:#111827">' + stats.totalPct + '%</td>' +
+          '<td style="padding:3px 6px;text-align:center;font-size:0.8rem;font-weight:800;border:' + gridBorder + ';background:#ffe2e2;color:' + basisColor + ';' + progressColStyle(true) + '">' + stats.basisPct + '%</td>' +
+        '</tr>';
+      }).join('');
+
+      var avg = 0;
+      var basisAvg = 0;
+      var perfect = 0;
+      list.forEach(function(t) {
+        var stats = getCompletionStats_(t, cols, basisCount);
+        avg += stats.totalPct;
+        basisAvg += stats.basisPct;
+        if (stats.done === weekCount && weekCount > 0) perfect++;
+      });
+      avg = list.length > 0 ? Math.round(avg / list.length) : 0;
+      basisAvg = list.length > 0 ? Math.round(basisAvg / list.length) : 0;
+      topSummaryCells = topSummaryCells
+        .replace(avgPlaceholder_ + '%', avg + '%')
+        .replace(perfectPlaceholder_ + '名', perfect + '名');
+
+      return '<div id="completion-matrix-print-area" style="position:relative;left:50%;transform:translateX(-50%);width:calc(100vw - 28px);max-width:1500px;background:#ffffff;border:1px solid #d1d5db;border-radius:4px;padding:0;margin-bottom:14px;overflow:hidden">' +
+        '<div id="completion-matrix-scroll" style="overflow-x:auto;-webkit-overflow-scrolling:touch">' +
+          '<table style="border-collapse:collapse;min-width:' + (160 + weekCount * 58 + 148) + 'px;width:100%;font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;background:#fff">' +
+            '<thead>' +
+              '<tr>' +
+                '<td style="height:24px;padding:2px 6px;background:#fff;border:1px solid #e5e7eb;font-size:0.9rem;font-weight:700;text-align:left;white-space:nowrap">eラーニング　進捗表</td>' +
+                topSummaryCells +
+                '<td class="completion-no-print" style="background:#fff;border:1px solid #e5e7eb;text-align:center;white-space:nowrap"><button type="button" onclick="downloadCompletionCsv_()" style="background:#1e293b;color:#fff;border:0;border-radius:4px;padding:2px 8px;font-size:0.7rem;font-weight:700;cursor:pointer">CSV</button> <button type="button" onclick="printCompletionMatrix_()" style="background:#0ea5e9;color:#fff;border:0;border-radius:4px;padding:2px 8px;font-size:0.7rem;font-weight:700;cursor:pointer">印刷</button></td>' +
+                '<td style="background:#fff;border:1px solid #e5e7eb"></td>' +
+              '</tr>' +
+              '<tr><th style="position:sticky;left:0;z-index:2;background:#fff;padding:2px 6px;border:' + gridBorder + ';font-size:0.7rem;text-align:left;color:#111827;white-space:nowrap"></th>' +
+              dateHeaderCells +
+              '<th style="padding:2px 5px;border:' + gridBorder + ';background:#fff;font-size:0.68rem;color:#2563eb;white-space:nowrap;text-align:center">全' + weekCount + '回<br>進捗率</th>' +
+              '<th style="padding:2px 5px;border:' + gridBorder + ';background:#fff;font-size:0.68rem;color:#2563eb;white-space:nowrap;text-align:center;' + progressColStyle(true) + '">今週基準比<br>(' + basisCount + '回)進捗率</th></tr>' +
+              '<tr><th style="position:sticky;left:0;z-index:2;padding:5px 6px;background:' + sectionBg + ';border:' + gridBorder + ';font-size:0.95rem;text-align:left;color:#fff;white-space:nowrap">' + appLabel + '</th>' +
+              weekHeaderCells +
+              '<th style="padding:4px 6px;border:' + gridBorder + ';background:' + sectionDark + ';font-size:0.9rem;color:#fff;text-align:center">' + avg + '%</th>' +
+              '<th style="padding:4px 6px;border:' + gridBorder + ';background:' + sectionDark + ';font-size:0.9rem;color:#fff;text-align:center;' + progressColStyle(true) + '">' + basisAvg + '%</th></tr>' +
+            '</thead>' +
+            '<tbody>' + rows + '</tbody>' +
+            '<tfoot><tr><td colspan="' + (weekCount + 3) + '" style="height:24px;padding:3px 8px;border:1px solid #e5e7eb;background:#fff;text-align:right;font-size:0.78rem;color:#374151">' + appLabel + '　各' + escapeHtml(qCount) + '問</td></tr></tfoot>' +
+          '</table>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function ensureCompletionPrintStyles_() {
+      if (!document.getElementById('completion-print-styles')) {
+        var css =
+          '#completion-print-root{display:none;}' +
+          '@media print {' +
+            '@page{size:A4 landscape;margin:6mm;}' +
+            'html,body{background:#fff!important;margin:0!important;padding:0!important;}' +
+            'body.completion-printing > :not(#completion-print-root){display:none!important;}' +
+            'body.completion-printing #completion-print-root{display:block!important;width:285mm!important;margin:0!important;padding:0!important;background:#fff!important;}' +
+            'body.completion-printing #completion-print-root *{box-sizing:border-box!important;}' +
+            'body.completion-printing #completion-print-root > div{position:static!important;left:auto!important;transform:none!important;width:285mm!important;max-width:none!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;overflow:visible!important;}' +
+            'body.completion-printing #completion-print-root div{overflow:visible!important;}' +
+            'body.completion-printing #completion-print-root table{width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse!important;page-break-inside:avoid!important;break-inside:avoid!important;}' +
+            'body.completion-printing #completion-print-root th,body.completion-printing #completion-print-root td{height:4.6mm!important;padding:.45mm .7mm!important;font-size:6.1pt!important;line-height:1.05!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;}' +
+            'body.completion-printing #completion-print-root thead tr:first-child td{height:5mm!important;font-size:6pt!important;}' +
+            'body.completion-printing #completion-print-root thead tr:nth-child(2) th{font-size:5.6pt!important;}' +
+            'body.completion-printing #completion-print-root thead tr:nth-child(3) th{font-size:6.2pt!important;}' +
+            'body.completion-printing #completion-print-root tbody td:first-child,body.completion-printing #completion-print-root thead th:first-child{position:static!important;left:auto!important;width:30mm!important;}' +
+            'body.completion-printing #completion-print-root .completion-no-print,body.completion-printing #completion-print-root button{display:none!important;}' +
+          '}';
+        var style = document.createElement('style');
+        style.id = 'completion-print-styles';
+        style.type = 'text/css';
+        style.appendChild(document.createTextNode(css));
+        document.head.appendChild(style);
+      }
+      if (!window.__completionPrintEventsBound) {
+        window.addEventListener('beforeprint', prepareCompletionPrint_);
+        window.addEventListener('afterprint', cleanupCompletionPrint_);
+        window.__completionPrintEventsBound = true;
+      }
+    }
+
+    function prepareCompletionPrint_() {
+      var source = document.getElementById('completion-matrix-print-area');
+      if (!source) return;
+      var existing = document.getElementById('completion-print-root');
+      if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+      var root = document.createElement('div');
+      root.id = 'completion-print-root';
+      root.appendChild(source.cloneNode(true));
+      document.body.appendChild(root);
+      document.body.classList.add('completion-printing');
+    }
+
+    function cleanupCompletionPrint_() {
+      document.body.classList.remove('completion-printing');
+      var root = document.getElementById('completion-print-root');
+      if (root && root.parentNode) root.parentNode.removeChild(root);
+    }
+
+    function printCompletionMatrix_() {
+      ensureCompletionPrintStyles_();
+      prepareCompletionPrint_();
+      window.print();
+      setTimeout(cleanupCompletionPrint_, 1000);
+    }
+
+    function csvCell_(value) {
+      var s = String(value === null || value === undefined ? '' : value);
+      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+
+    function downloadCompletionCsv_() {
+      var list = _teamData_ || [];
+      var cols = getCompletionColumns_(list);
+      var basisCount = getCompletionBasisCount_(cols);
+      var header = ['氏名'].concat(cols.map(function(c, idx) {
+        var range = getCompletionDateRange_(c, idx, cols.length);
+        return String(c.label || ('第' + (idx + 1) + '回')) + (range ? '(' + range + ')' : '');
+      })).concat(['全' + cols.length + '回進捗率', '今週基準比進捗率']);
+      var rows = list.map(function(t) {
+        var cbt = (t.progress && t.progress.completedByTest) || {};
+        var stats = getCompletionStats_(t, cols, basisCount);
+        var cells = cols.map(function(c) {
+          var rec = cbt[String(c.testIndex)];
+          return rec && rec.completed ? '○' : '';
+        });
+        return [t.displayName || t.email || ''].concat(cells).concat([stats.totalPct + '%', stats.basisPct + '%']);
+      });
+      var csv = '﻿' + [header].concat(rows).map(function(row) {
+        return row.map(csvCell_).join(',');
+      }).join('\r\n');
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      var a = document.createElement('a');
+      var d = new Date();
+      a.href = URL.createObjectURL(blob);
+      a.download = '受講完了表_' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function() {
+        URL.revokeObjectURL(a.href);
+        document.body.removeChild(a);
+      }, 200);
+    }
+
     function renderTeam(team) {
       const list = team || [];
+      _teamData_ = list;  // CSV/印刷用キャッシュ更新
       if (list.length === 0) {
         setHtml('home-team', '<div class="small">部下データがありません。</div>');
         return;
@@ -1661,7 +1944,8 @@
       }).join('');
       const table = '<div class="table-wrap"><table><thead><tr><th>メンバー</th><th>進捗</th><th>平均点</th><th>直近7日</th></tr></thead><tbody>' +
         rows + '</tbody></table></div>';
-      setHtml('home-team', table);
+      setHtml('home-team', buildCompletionMatrix_(list) + table);
+      ensureCompletionPrintStyles_();
     }
 
     function startTest(testIndex) {
