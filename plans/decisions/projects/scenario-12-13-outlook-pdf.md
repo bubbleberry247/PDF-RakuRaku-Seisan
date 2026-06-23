@@ -796,3 +796,21 @@ else:
 ### 備考
 - `review_helper` 配下の `__pycache__` は `.gitignore` により Git 管理対象外
 - customer 固有設定を含む live config は repo 側にも同期した。外部共有が必要になった場合は別途 template 化を検討する
+
+---
+
+## 2026-06-19 [CODE] Outlook COM事前チェック fail-closed と移行キット反映
+
+### 決定内容
+- `C:\ProgramData\RK10\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py` に `--check-outlook-com` と本体開始前のOutlook COM preflightを追加した。
+- Outlook COMが起動不能・応答不能の場合、保存/印刷/メール送信へ進む前に終了コード2で安全停止する。
+- 修正版 `outlook_save_pdf_and_batch_print.py` を `E:\東海インプル建設\RK10_本番移行キット_20260616\delta\RK10_差分移行キット_12_13\files\Robots\12・13受信メールのPDFを保存・一括印刷\tools\outlook_save_pdf_and_batch_print.py` へ反映した。
+
+### 検証
+- `C:\ProgramData\RK10\Robots\migration\reports\s12_13_outlook_com_preflight_fix_20260619_1123\s12_13_outlook_com_preflight_fix_report.md.numbered` で `py_compile_exit=0`、`--check-outlook-com` とdry-run preflightが終了コード2でfail-closedすることを確認。
+- `C:\ProgramData\RK10\Robots\migration\reports\s12_13_migration_kit_update_20260619_1205\s12_13_migration_kit_update_report.md.numbered` で差分キット反映、kit payload syntax exit 0、`apply_delta_1213_20260614.ps1 -DryRun` exit 0、`verify_delta_1213_20260614.ps1` exit 0、live/kit SHA256一致を確認。
+- 実送信、実印刷、本番登録は未実施。現在のPCではOutlook COMが壊れているため、フルメール保存/印刷フローはHOLD継続。
+
+### 運用メモ
+- 12/13差分は20260616本番移行キット本体の後に `delta\RK10_差分移行キット_12_13` として別途適用する。
+- E差分フォルダ内スクリプト単体は `common` モジュールを含まないため、直接実行ではなく適用後のロボット配置で確認する。

@@ -1628,3 +1628,21 @@ self.page.goto(target_url)
 - `c:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\.claude\rules\structural-verification.md`（新規作成）
 - `c:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\AGENTS.md`（Gate 4-5追加 + 自律度制御セクション追加）
 - `C:\Users\masam\.claude\projects\c--ProgramData-Generative-AI-Github-PDF-RakuRaku-Seisan\memory\MEMORY.md`（構造変更記録）
+## 2026-06-23: v2 dry-run Excel COM RPC failure fixed
+
+### [BUG] dry-run was still using Excel COM for sheet mutation/planned inserts
+- Reproduction: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\s55_v2_current_safe_recheck_20260623_1048\s55_v2_full_dryrun_unbuffered.stdout.txt.numbered`
+- Failure: Excel COM disconnected with `RPC サーバーを利用できません` / `リモート プロシージャ コールに失敗しました` while processing the 153-row v2 sample.
+- Root cause: v2 source-copy dry-run still opened Excel through xlwings, copied/select-mutated sheets, and attempted COM row insertion for slot-shortage planning.
+
+### [FIX] dry-run uses read-only openpyxl and insert planning
+- Backup before edit: `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\tools\excel_writer_v2.py.before_dryrun_no_com_insert_20260623_1056`
+- Changed file: `C:\ProgramData\RK10\Robots\55 １５日２５日末日振込エクセル作成\tools\excel_writer_v2.py`
+- Behavior: dry-run source-copy mode opens the source workbook through openpyxl without saving, selects the existing source sheet without copying, and records row insertions as `[DRY RUN INSERT PLAN]` instead of COM row inserts.
+- Real write mode remains xlwings-only for source-copy mode to avoid openpyxl round-trip corruption.
+
+### [VERIFICATION] 153-row v2 sample dry-run passed
+- Report: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\s55_v2_dryrun_rpc_fix_20260623\s55_v2_dryrun_rpc_fix_report.md.numbered`
+- Fixed stdout: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\s55_v2_current_safe_recheck_20260623_1115_openpyxl_dryrun_insertplan\s55_v2_full_dryrun_unbuffered.stdout.txt.numbered`
+- Result: 153 input rows, 60 non-transfer skipped, 93 transfer candidates, 45 registered successes, 48 unregistered-to-empty-row plans, 16 dry-run insert plans, errors 0, overflow 0, total amount 12,938,354 yen.
+- Boundary: this proves LOCAL dry-run/no-mail/no-processed-log business amount and row-allocation planning only. Production write/mail/RK10 runtime and human business approval remain separate gates.

@@ -596,3 +596,30 @@ s57_main.py --phase run --env test → 全ステップ done
 **dry-run テスト**: `python s57_main.py --phase run --env test --dry-run` → 全ステップ OK 表示、exit code 0 ✅
 
 **残タスク**: 変更なし（PROD実行のみ）
+
+
+## 2026-05-28
+
+### [CONFIG][PROD] 通知先変更
+
+**変更目的**: PROD運用で、正常処理完了は管理部共有メールへ通知し、エラー時は管理部共有メールと保守担当の両方へ通知する。
+
+**変更ファイル**:
+- `C:\ProgramData\RK10\Robots\【57基幹システムより仕訳はきだし】\config\tool_config_prod.json`
+
+**変更内容**:
+- `notifications.to`: `kanri.tic@tokai-ic.co.jp`
+- `notifications.error_cc`: `kalimistk@gmail.com`
+- `notifications.completion_enabled`: `true`
+
+**動作整理**:
+- 正常完了: To=`kanri.tic@tokai-ic.co.jp`
+- エラー: To=`kanri.tic@tokai-ic.co.jp`, Cc=`kalimistk@gmail.com`
+
+**バックアップ**:
+- `C:\ProgramData\RK10\Robots\【57基幹システムより仕訳はきだし】\config\tool_config_prod_before_notify_20260528_091340.json`
+
+**検証**:
+- `python -m py_compile "C:\ProgramData\RK10\Robots\【57基幹システムより仕訳はきだし】\tools\s57_main.py"` → OK
+- `tool_config_prod.json` のJSON parse → OK
+- `_load_notification_config("prod")` 読み込み → To=`kanri.tic@tokai-ic.co.jp`, Error CC=`kalimistk@gmail.com`, completion_enabled=`True`
