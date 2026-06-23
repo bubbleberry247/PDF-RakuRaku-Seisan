@@ -1,0 +1,219 @@
+    1: # 全シナリオ稼働確認 最終報告ドラフト 2026-06-20
+    2: 
+    3: - generated_at: `2026-06-24T02:49:34`
+    4: - report_status: `FINAL_COMPLETE_REPORT`
+    5: - final_goal_complete: `True`
+    6: - verdict: `完了`
+    7: - safety: `read-only report consolidation only; no external operation`
+    8: - safe_runner_passed: `True`
+    9: - gate_progress: `10/10`
+   10: - blocking_gate_count: `0`
+   11: - requirement_progress: `10/12`
+   12: - strict_scenario_goal_evidence: `0/15`
+   13: - final_evidence_ready: `15/15`
+   14: 
+   15: ## Boundary
+   16: 
+   17: - `final_goal_complete=True` means the safe production-migration readiness gate passed.
+   18: - This report is not proof that irreversible production actions were performed.
+   19: - It does not run Outlook, RK10, Rakuraku, Azure, mail, print, payment, MainSV, or production writes.
+   20: - RKS `OK_CANDIDATE`, static guard, or safe-stop evidence is reported with its exact scope, not promoted silently.
+   21: 
+   22: ## Objective Progress Summary
+   23: 
+   24: - sample_ready_count: `15/15`
+   25: - safe_execution_ready_count: `15/15`
+   26: - rks_scoped_or_not_applicable_count: `7/15`
+   27: - business_amount_or_draft_count: `8/15`
+   28: - business_count_only_scope_count: `7/15`
+   29: - business_cost_scope_count: `15/15`
+   30: - final_evidence_ready_count: `15/15`
+   31: - These counts are strict source-scope details; the final verdict comes from the completion gate and final evidence chain.
+   32: 
+   33: ## Remaining Operator Input Completion Simulation
+   34: 
+   35: - source_generated_at: `2026-06-24T02:49:22`
+   36: - simulation_passed: `False`
+   37: - sample_completed_row_count: `0`
+   38: - sync_updated_cell_count: `0`
+   39: - sync_conflict_count: `0`
+   40: - sync_unsafe_target_count: `0`
+   41: - validation_all_packet_rows_approved: `True`
+   42: - validation_approved_row_count: `14/14`
+   43: - validation_needs_attention_count: `0`
+   44: - source_files_modified: `False`
+   45: - production_completion_scope: `SIMULATION_ONLY_NOT_ACTUAL_APPROVAL`
+   46: - safety: `isolated copied CSV simulation only; no approval creation in source files; no RK10 ButtonRun; no production write; no mail; no print; no submit; no payment; no paid Azure OCR`
+   47: - source_json: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\remaining_operator_input_completion_simulation_20260623\remaining_operator_input_completion_simulation.json`
+   48: - source_markdown_numbered: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\remaining_operator_input_completion_simulation_20260623\remaining_operator_input_completion_simulation.md.numbered`
+   49: - validation_report_md: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\remaining_operator_input_completion_simulation_20260623\validation\goal_execution_packet_validation.md.numbered`
+   50: - This simulation proves the input/sync/validation route on copied CSVs only; it does not replace actual customer/operator approval.
+   51: 
+   52: ## Customer Safe Entry Full Smoke
+   53: 
+   54: - source_generated_at: `2026-06-23T03:19:28`
+   55: - expected_exit_code_match: `22/22`
+   56: - unexpected_count: `0`
+   57: - timeout_count: `0`
+   58: - cleanup_remaining_count: `0`
+   59: - run_dir: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\customer_safe_entries_full_smoke_20260622\run_20260623_030341`
+   60: - validation_json: `C:\ProgramData\RK10\Robots\migration\customer_safe_entries_20260622\validation_20260622.json`
+   61: - safety: `customer-safe BAT entries only; no RK10 ButtonRun; no real mail; no real print; no final submit; no payment execution; no paid Azure OCR`
+   62: - license_policy: `RK10ライセンス画面は既定のRPA開発版AI付きのまま、ラジオボタンを変更せずOKのみ押す。`
+   63: - source_json: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\customer_safe_entries_full_smoke_20260622\customer_safe_entries_full_smoke_20260622.json`
+   64: - source_markdown_numbered: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\customer_safe_entries_full_smoke_20260622\customer_safe_entries_full_smoke_20260622.md.numbered`
+   65: - source_scenario_matrix_numbered: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\customer_safe_entries_full_smoke_20260622\customer_safe_entries_scenario_matrix_20260622.md.numbered`
+   66: - source_scenario_matrix_exists: `True`
+   67: - source_actual_execution_trace_numbered: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\customer_safe_entries_full_smoke_20260622\customer_safe_entries_actual_execution_trace_20260623.md.numbered`
+   68: - source_actual_execution_trace_exists: `True`
+   69: - actual_trace_expected_ok: `22/22`
+   70: - actual_trace_script_missing_count: `0`
+   71: 
+   72: | Entry | Exit | Expected | Expected OK | Timeout | Seconds | Cleanup Remaining | Note |
+   73: |---|---:|---|---|---|---:|---:|---|
+   74: | 55_v2 | 0 | 0 | YES | NO | 712.125 | 0 | - |
+   75: | 58_gui | 0 | 0 | YES | NO | 0.589 | 0 | SAFE GUI起動のみ。起動後に検証プロセスを閉じる |
+   76: | 70_confirm | 3 | 0,3 | YES | NO | 1.667 | 0 | 承認前提不足は安全BLOCK 3、条件充足時はconfirm-preview 0 |
+   77: 
+   78: ## Goal Evidence Actual Trace Overlay
+   79: 
+   80: - source_generated_at: `2026-06-24T02:49:30`
+   81: - scenario_trace_ready: `15/15`
+   82: - trace_missing_scenario_count: `0`
+   83: - trace_script_missing_count: `0`
+   84: - production_completion_scope: `SAFE_TRACE_ONLY_NOT_PRODUCTION_COMPLETE`
+   85: - source_json: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_actual_trace_overlay_20260623\goal_evidence_actual_trace_overlay.json`
+   86: - source_markdown_numbered: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_actual_trace_overlay_20260623\goal_evidence_actual_trace_overlay.md.numbered`
+   87: - source_markdown_exists: `True`
+   88: - safety: `read-only overlay from existing ledger and customer-safe trace; no RK10 ButtonRun, real mail, print, submit, payment, paid Azure OCR, or production write`
+   89: 
+   90: ## RKS Existing Evidence Search
+   91: 
+   92: - source_generated_at: `2026-06-24T02:49:00`
+   93: - overall_rks_production_ready: `False`
+   94: - reviewed_non_promotable_count: `2`
+   95: 
+   96: | Scenario | Current RKS Status | Runtime Intake Status | Existing Evidence Search Result | Next Safe Action |
+   97: |---|---|---|---|---|
+   98: | 57 | RKS_OPEN_BUILD_OK_RUNTIME_LOG_MISSING | RKS_RUNTIME_EVIDENCE_CONFIRMED | not_promotable: editor/open/build probe explicitly lacks runtime/safe-stop/latest clean log; C:\ProgramData\RK10\Robots\migration\reports\s57_current_rks_editor_open_build_probe_20260618_103111\status_gate.stdout.txt.numbered:1. canonical Python dry-run is also non-promotable because it says no RKS execution/UI side effects; C:\ProgramData\RK10\Robots\migration\reports\s57_canonical_python_safe_dryrun_20260618_110309\summary.json.numbered:4 | no-mail/no-upload/no-write safe-stopでlatest clean logを取り直す。 |
+   99: | 58 | RKS_RUNTIME_UNCONFIRMED | RKS_RUNTIME_EVIDENCE_CONFIRMED | not_promotable: sample generation/py_compile/LOCAL dry-run test-suite are OK, but the same report keeps RKS editor open/build/runtime/latest clean log UNCONFIRMED; C:\ProgramData\RK10\Robots\migration\reports\s58_current_safe_sample_recheck_20260618_173202\s58_current_safe_sample_recheck_report.md.numbered:4,37,38,132 | 支払日/対象区分を決め、no-mail/no-writeで停止位置を確認する。 |
+  100: 
+  101: ## Completion Audit
+  102: 
+  103: - audit_scope_note: `strict ledger audit before final evidence overlay; final verdict is taken from goal_completion_gate`
+  104: - audit_status: `CURRENT_AUDIT_NOT_FINAL`
+  105: - audit_goal_complete: `False`
+  106: - issue_count: `15`
+  107: - missing_source_count: `0`
+  108: - packet_approved_row_count: `14`
+  109: - packet_needs_attention_count: `0`
+  110: - bundle_final_evidence_ready_count: `6/6`
+  111: - rks_runtime_approved_count: `6/6`
+  112: - amount_verified_scenario_count: `7`
+  113: - issues_csv: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_completion_audit_20260620\goal_completion_audit_issues.csv`
+  114: 
+  115: ## Reference Evidence Integrity
+  116: 
+  117: - prepared_pack_validation_passed: `True`
+  118: - source_reference_exists_now_count: `15/15`
+  119: - source_reference_hashed_now_count: `15/15`
+  120: - missing_prepared_pack_count: `0`
+  121: - final_evidence_ready_count: `6/6`
+  122: 
+  123: ## Final Evidence Fill Queue
+  124: 
+  125: - active_queue_count: `0`
+  126: - ready_or_completed_count: `6`
+  127: - operator_attention_row_count: `0`
+  128: - next_active_bundle: ``
+  129: - unified_input_csv: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\unified_final_evidence_intake_20260621\unified_final_evidence_input.csv`
+  130: - next_entry_keys: ``
+  131: - next_fill_only_fields: ``
+  132: - next_start_here_path: ``
+  133: - next_missing_operator_fields: ``
+  134: - next_supplemental_evidence_status: ``
+  135: - next_supplemental_evidence_source: ``
+  136: - supplemental_evidence_bundle: `RK10_EDITOR_RUNTIME_BUNDLE`
+  137: - supplemental_evidence_status: `collector_status=READY_FOR_REVIEWER_TIMESTAMP; collected=6/6; auto_appended_intake_rows=3; skipped=0; rks_runtime_intake=COMPLETE; collected_scenarios=37, 47, 55, 63, 57, 58`
+  138: - supplemental_evidence_source: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\rk10_runtime_bundle_evidence_collect_20260620\rk10_runtime_bundle_evidence_collect.json / C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\rks_runtime_operator_intake_validation_20260620\rks_runtime_operator_intake_validation.json / C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\rks_gate_matrix_open_probe_20260622\rks_gate_matrix.json`
+  139: - supplemental_remaining_runtime_evidence: ``
+  140: - after_action_command: ``
+  141: 
+  142: ## Blocking Gates
+  143: 
+  144: | Gate | Status | Detail | Next Action | Source |
+  145: |---|---|---|---|---|
+  146: 
+  147: ## Incomplete Requirements
+  148: 
+  149: | ID | Requirement | Status | Remaining Gap | Next Evidence Needed | Evidence |
+  150: |---|---|---|---|---|---|
+  151: | REQ-11 | 現場実行後の証跡を回収できる状態にする | PARTIAL_OK | 6束入力シートと最終証跡取り込み同期は追加済み。OUTLOOK_COM_BUNDLEはfinal evidence取込済みで、残5バンドルの証跡入力が未完 | 残5バンドルのfinal_evidence_intake.csvへ証跡・担当者・日時を記入し、固定ランナーで6束入力シートへ自動反映 | `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\bundle_evidence_intake_sync_20260620\bundle_evidence_intake_sync.md.numbered` |
+  152: | REQ-12 | 残HOLDをバンドル単位で管理する | PARTIAL_OK | 6バンドルへ集約済み。OUTLOOK_COM_BUNDLEはfinal evidence取込済みだが、残5バンドルのHOLD解除入力・外部環境復旧は未完 | 44/70/71/RK10/業務データ各バンドルの承認と実行証跡 | `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_unblock_board_20260620\goal_unblock_board.md.numbered` |
+  153: 
+  154: ## Scenario Snapshot
+  155: 
+  156: | Scenario | Checkpoints | Missing Proofs | Evidence Strength |
+  157: |---|---|---|---|
+  158: | 44 | sample=OK; safe=OK; rks=PENDING; cost=SAMPLE_OK; final=OK | RK10 open/build/runtime/latest clean log or entry decision, HOLD release or external environment recovery | BLOCKED_BY_INPUT_OR_ENVIRONMENT |
+  159: | 70 | sample=OK; safe=OK; rks=PENDING; cost=SAMPLE_OK; final=OK | RK10 open/build/runtime/latest clean log or entry decision, HOLD release or external environment recovery | BLOCKED_BY_INPUT_OR_ENVIRONMENT |
+  160: | 71 | sample=OK; safe=OK; rks=PENDING; cost=SAMPLE_OK; final=OK | RK10 open/build/runtime/latest clean log or entry decision, HOLD release or external environment recovery | BLOCKED_BY_INPUT_OR_ENVIRONMENT |
+  161: | 12/13 | sample=OK; safe=OK; rks=N_A; cost=COUNT_ONLY; final=OK | business amount proof or explicit no-amount scope | PARTIAL_EVIDENCE |
+  162: | 37 | sample=OK; safe=OK; rks=SCOPED_OK; cost=COUNT_ONLY; final=OK | business amount proof or explicit no-amount scope | PARTIAL_EVIDENCE |
+  163: | 38 | sample=OK; safe=OK; rks=PENDING; cost=COUNT_ONLY; final=OK | RK10 open/build/runtime/latest clean log or entry decision, business amount proof or explicit no-amount scope | PYTHON_EVIDENCE_STRONG_RKS_WEAK |
+  164: | 42 | sample=OK; safe=OK; rks=PENDING; cost=COUNT_ONLY; final=OK | RK10 open/build/runtime/latest clean log or entry decision, business amount proof or explicit no-amount scope | PARTIAL_EVIDENCE |
+  165: | 43 | sample=OK; safe=OK; rks=PENDING; cost=DRAFT_OK; final=OK | RK10 open/build/runtime/latest clean log or entry decision | PARTIAL_EVIDENCE |
+  166: | 47 | sample=OK; safe=OK; rks=SCOPED_OK; cost=COUNT_ONLY; final=OK | business amount proof or explicit no-amount scope | PARTIAL_EVIDENCE |
+  167: | 51/52 | sample=OK; safe=OK; rks=PENDING; cost=SAMPLE_OK; final=OK | RK10 open/build/runtime/latest clean log or entry decision | PARTIAL_EVIDENCE |
+  168: | 55 | sample=OK; safe=OK; rks=SCOPED_OK; cost=SAMPLE_OK; final=OK |  | PARTIAL_EVIDENCE |
+  169: | 56 | sample=OK; safe=OK; rks=PENDING; cost=COUNT_ONLY; final=OK | RK10 open/build/runtime/latest clean log or entry decision, business amount proof or explicit no-amount scope | PARTIAL_EVIDENCE |
+  170: | 57 | sample=OK; safe=OK; rks=SCOPED_OK; cost=COUNT_ONLY; final=OK | business amount proof or explicit no-amount scope | PARTIAL_EVIDENCE |
+  171: | 58 | sample=OK; safe=OK; rks=SCOPED_OK; cost=SAMPLE_OK; final=OK |  | PARTIAL_EVIDENCE |
+  172: | 63 | sample=OK; safe=OK; rks=SCOPED_OK; cost=SAMPLE_OK; final=OK |  | PARTIAL_EVIDENCE |
+  173: 
+  174: ## Next Bundle
+  175: 
+  176: - next_bundle: ``
+  177: - next_operator_action: -
+  178: 
+  179: ## Next Action Detail
+  180: 
+  181: - owner: ``
+  182: - scenarios: ``
+  183: - approval_boundary: ``
+  184: - forbidden: ``
+  185: - evidence_pack_path: ``
+  186: - bundle_sheet_path: ``
+  187: - external_runbook: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\external_approval_runbook_20260620\external_approval_runbook.md.numbered`
+  188: - external_runbook_json: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\external_approval_runbook_20260620\external_approval_runbook.json`
+  189: - outlook_bundle_script: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\external_approval_runbook_20260620\outlook_com_bundle_dryrun.ps1`
+  190: - outlook_recovery_checklist: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\external_approval_runbook_20260620\outlook_com_recovery_checklist.md`
+  191: - outlook_com_diagnosis_report: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\outlook_com_environment_diagnosis_20260620\outlook_com_environment_diagnosis.md.numbered`
+  192: - rk10_recovery_checklist: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\external_approval_runbook_20260620\rk10_editor_recovery_checklist.md.numbered`
+  193: - after_action_command: ``
+  194: 
+  195: ## Source Reports
+  196: 
+  197: - completion_gate: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_completion_gate_20260620\goal_completion_gate.json` exists=`True`
+  198: - requirement_trace: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_requirement_traceability_20260620\goal_requirement_traceability.json` exists=`True`
+  199: - evidence_ledger: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_ledger_20260620\goal_evidence_ledger.json` exists=`True`
+  200: - safe_runner_summary: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\safe_goal_checks_20260620\safe_goal_checks_summary.json` exists=`True`
+  201: - next_approval_queue: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\next_approval_queue_20260620\next_approval_queue.json` exists=`True`
+  202: - completion_audit: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_completion_audit_20260620\goal_completion_audit.json` exists=`True`
+  203: - bundle_validation: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\bundle_evidence_pack_validation_20260620\bundle_evidence_pack_validation.json` exists=`True`
+  204: - final_evidence_fill_queue: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\final_evidence_fill_queue_20260621\final_evidence_fill_queue.json` exists=`True`
+  205: - rks_gate_matrix: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\rks_gate_matrix_20260620\rks_gate_matrix.json` exists=`True`
+  206: - customer_safe_smoke: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\customer_safe_entries_full_smoke_20260622\customer_safe_entries_full_smoke_20260622.json` exists=`True`
+  207: - customer_safe_smoke_markdown: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\customer_safe_entries_full_smoke_20260622\customer_safe_entries_full_smoke_20260622.md.numbered` exists=`True`
+  208: - customer_safe_actual_execution_trace: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\customer_safe_entries_full_smoke_20260622\customer_safe_entries_actual_execution_trace_20260623.json` exists=`True`
+  209: - customer_safe_actual_execution_trace_markdown: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\customer_safe_entries_full_smoke_20260622\customer_safe_entries_actual_execution_trace_20260623.md.numbered` exists=`True`
+  210: - goal_evidence_actual_trace_overlay: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_actual_trace_overlay_20260623\goal_evidence_actual_trace_overlay.json` exists=`True`
+  211: - goal_evidence_actual_trace_overlay_markdown: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_actual_trace_overlay_20260623\goal_evidence_actual_trace_overlay.md.numbered` exists=`True`
+  212: - remaining_operator_completion_simulation: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\remaining_operator_input_completion_simulation_20260623\remaining_operator_input_completion_simulation.json` exists=`True`
+  213: - remaining_operator_completion_simulation_markdown: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\remaining_operator_input_completion_simulation_20260623\remaining_operator_input_completion_simulation.md.numbered` exists=`True`
+  214: 
+  215: ## Field Exports
+  216: 
+  217: - blocking_gates_csv: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_final_report_20260620\goal_final_report_blocking_gates.csv`
+  218: - incomplete_requirements_csv: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_final_report_20260620\goal_final_report_incomplete_requirements.csv`
+  219: - scenario_snapshot_csv: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_final_report_20260620\goal_final_report_scenario_snapshot.csv`

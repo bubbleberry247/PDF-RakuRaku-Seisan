@@ -314,3 +314,36 @@ def test_write_outputs_creates_csv_markdown_json_and_numbered_files(tmp_path: Pa
     assert (out_dir / "prod_readiness_remaining_work_breakdown.md.numbered").exists()
     assert (out_dir / "remaining_bundle_work.csv.numbered").exists()
     assert (out_dir / "remaining_scenario_work.csv.numbered").exists()
+
+
+def test_build_markdown_uses_complete_conclusion_when_goal_complete(
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    payload = {
+        "summary": {
+            "generated_at": "2026-06-24T02:50:00",
+            "goal_complete_line": "5: - final_goal_complete: `True`",
+            "safe_runner_generated_at": "3: - generated_at: `2026-06-24T02:41:12`",
+            "safe_runner_line": "4: - overall_passed: `True`",
+            "blocking_gate_line": "8: - blocking_gate_count: `0`",
+            "rks_validation_line": "5: - overall_rks_runtime_evidence_complete: `True`",
+            "active_bundle_count": 0,
+            "human_input_bundle_count": 0,
+            "scenario_count": 0,
+            "open_probe_confirmed_scenario_count": 0,
+            "safety": "no production registration",
+            "sources": {
+                "fill_queue_csv": str(tmp_path / "fill.csv"),
+                "business_cost_csv": str(tmp_path / "cost.csv"),
+                "rks_open_probe_matrix_json": str(tmp_path / "rks_open.json"),
+            },
+        },
+        "bundles": [],
+        "scenarios": [],
+    }
+
+    markdown = module.build_markdown(payload, tmp_path)
+
+    assert "固定ランナーと最終ゲートは通過しており、本番移行OK状態として扱えます。" in markdown
+    assert "最終ゴールは未完了です" not in markdown

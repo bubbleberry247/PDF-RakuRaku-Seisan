@@ -1,0 +1,16 @@
+﻿scenario,objective_checkpoint_summary,missing_objective_proofs,evidence_strength
+44,sample=OK; safe=OK; rks=PENDING; cost=SAMPLE_OK; final=OK,"RK10 open/build/runtime/latest clean log or entry decision, HOLD release or external environment recovery",BLOCKED_BY_INPUT_OR_ENVIRONMENT
+70,sample=OK; safe=OK; rks=PENDING; cost=SAMPLE_OK; final=OK,"RK10 open/build/runtime/latest clean log or entry decision, HOLD release or external environment recovery",BLOCKED_BY_INPUT_OR_ENVIRONMENT
+71,sample=OK; safe=OK; rks=PENDING; cost=SAMPLE_OK; final=OK,"RK10 open/build/runtime/latest clean log or entry decision, HOLD release or external environment recovery",BLOCKED_BY_INPUT_OR_ENVIRONMENT
+12/13,sample=OK; safe=OK; rks=N_A; cost=COUNT_ONLY; final=OK,business amount proof or explicit no-amount scope,PARTIAL_EVIDENCE
+37,sample=OK; safe=OK; rks=SCOPED_OK; cost=COUNT_ONLY; final=OK,business amount proof or explicit no-amount scope,PARTIAL_EVIDENCE
+38,sample=OK; safe=OK; rks=PENDING; cost=COUNT_ONLY; final=OK,"RK10 open/build/runtime/latest clean log or entry decision, business amount proof or explicit no-amount scope",PYTHON_EVIDENCE_STRONG_RKS_WEAK
+42,sample=OK; safe=OK; rks=PENDING; cost=COUNT_ONLY; final=OK,"RK10 open/build/runtime/latest clean log or entry decision, business amount proof or explicit no-amount scope",PARTIAL_EVIDENCE
+43,sample=OK; safe=OK; rks=PENDING; cost=DRAFT_OK; final=OK,RK10 open/build/runtime/latest clean log or entry decision,PARTIAL_EVIDENCE
+47,sample=OK; safe=OK; rks=SCOPED_OK; cost=COUNT_ONLY; final=OK,business amount proof or explicit no-amount scope,PARTIAL_EVIDENCE
+51/52,sample=OK; safe=OK; rks=PENDING; cost=SAMPLE_OK; final=OK,RK10 open/build/runtime/latest clean log or entry decision,PARTIAL_EVIDENCE
+55,sample=OK; safe=OK; rks=SCOPED_OK; cost=SAMPLE_OK; final=OK,,PARTIAL_EVIDENCE
+56,sample=OK; safe=OK; rks=PENDING; cost=COUNT_ONLY; final=OK,"RK10 open/build/runtime/latest clean log or entry decision, business amount proof or explicit no-amount scope",PARTIAL_EVIDENCE
+57,sample=OK; safe=OK; rks=SCOPED_OK; cost=COUNT_ONLY; final=OK,business amount proof or explicit no-amount scope,PARTIAL_EVIDENCE
+58,sample=OK; safe=OK; rks=SCOPED_OK; cost=SAMPLE_OK; final=OK,,PARTIAL_EVIDENCE
+63,sample=OK; safe=OK; rks=SCOPED_OK; cost=SAMPLE_OK; final=OK,,PARTIAL_EVIDENCE

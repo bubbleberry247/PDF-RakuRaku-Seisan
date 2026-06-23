@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-23T18:00:37",
+  "generated_at": "2026-06-24T02:49:35",
   "overall_passed": true,
   "s12_exit_code_input": 2,
   "safety": "local compile, local unit tests, read-only evidence checkers, repository report writes only",
@@ -84,7 +84,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_completion_blocker_split_20260622.py"
       ],
       "return_code": 0,
-      "duration_seconds": 1.369,
+      "duration_seconds": 1.043,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\01_py_compile.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\01_py_compile.stderr.txt",
       "passed": true
@@ -184,7 +184,7 @@
         "-v"
       ],
       "return_code": 0,
-      "duration_seconds": 26.034,
+      "duration_seconds": 21.491,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\02_pytest.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\02_pytest.stderr.txt",
       "passed": true
@@ -198,7 +198,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\build_s44_spot_check_handoff_candidates_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.59,
+      "duration_seconds": 0.368,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\03_s44_spot_check_candidates.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\03_s44_spot_check_candidates.stderr.txt",
       "passed": true
@@ -212,7 +212,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\analyze_s44_review_db_amount_evidence_20260622.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.871,
+      "duration_seconds": 0.431,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\04_s44_review_db_amount_evidence.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\04_s44_review_db_amount_evidence.stderr.txt",
       "passed": true
@@ -226,7 +226,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\run_s44_sample_ok_shadow_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.41,
+      "duration_seconds": 0.308,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\05_s44_sample_ok_shadow.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\05_s44_sample_ok_shadow.stderr.txt",
       "passed": true
@@ -240,7 +240,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\run_s44_quick_bucket_ok_simulation_20260621.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.499,
+      "duration_seconds": 0.365,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\06_s44_quick_bucket_ok_simulation.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\06_s44_quick_bucket_ok_simulation.stderr.txt",
       "passed": true
@@ -254,7 +254,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\run_s70_sample_confirm_preview_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.958,
+      "duration_seconds": 1.141,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\07_s70_sample_confirm_preview.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\07_s70_sample_confirm_preview.stderr.txt",
       "passed": true
@@ -268,7 +268,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\validate_s71_sample_mock_ocr_apply_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.216,
+      "duration_seconds": 0.163,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\08_s71_sample_mock_ocr_apply.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\08_s71_sample_mock_ocr_apply.stderr.txt",
       "passed": true
@@ -282,7 +282,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_rks_static_guard_audit_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.236,
+      "duration_seconds": 0.576,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\09_rks_static_guard_audit.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\09_rks_static_guard_audit.stderr.txt",
       "passed": true
@@ -296,7 +296,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_rks_debugger_artifact_reconcile_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.209,
+      "duration_seconds": 0.193,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\10_rks_debugger_artifact_reconcile.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\10_rks_debugger_artifact_reconcile.stderr.txt",
       "passed": true
@@ -310,7 +310,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_rks_runtime_operator_pack_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.172,
+      "duration_seconds": 0.161,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\11_rks_runtime_operator_pack.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\11_rks_runtime_operator_pack.stderr.txt",
       "passed": true
@@ -324,7 +324,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\sync_rks_runtime_evidence_from_status_gates_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.518,
+      "duration_seconds": 0.157,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\12_rks_runtime_status_gate_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\12_rks_runtime_status_gate_sync.stderr.txt",
       "passed": true
@@ -338,7 +338,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\validate_rks_runtime_operator_intake_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.2,
+      "duration_seconds": 0.721,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\13_rks_runtime_intake_validation.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\13_rks_runtime_intake_validation.stderr.txt",
       "passed": true
@@ -352,7 +352,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_rks_gate_matrix_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.208,
+      "duration_seconds": 0.194,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\14_rks_gate_matrix.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\14_rks_gate_matrix.stderr.txt",
       "passed": true
@@ -368,7 +368,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\rks_gate_matrix_open_probe_20260622"
       ],
       "return_code": 0,
-      "duration_seconds": 0.226,
+      "duration_seconds": 0.176,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\15_rks_gate_matrix_open_probe.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\15_rks_gate_matrix_open_probe.stderr.txt",
       "passed": true
@@ -382,7 +382,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_sample_data_evidence_map_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.713,
+      "duration_seconds": 0.458,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\16_sample_data_evidence_map.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\16_sample_data_evidence_map.stderr.txt",
       "passed": true
@@ -396,7 +396,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_safe_execution_evidence_map_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.207,
+      "duration_seconds": 0.165,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\17_safe_execution_evidence_map.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\17_safe_execution_evidence_map.stderr.txt",
       "passed": true
@@ -410,7 +410,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_business_cost_evidence_map_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.67,
+      "duration_seconds": 0.213,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\18_business_cost_evidence_map.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\18_business_cost_evidence_map.stderr.txt",
       "passed": true
@@ -426,7 +426,7 @@
         "2"
       ],
       "return_code": 0,
-      "duration_seconds": 0.635,
+      "duration_seconds": 0.47,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\19_hold_gate_check.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\19_hold_gate_check.stderr.txt",
       "passed": true
@@ -442,7 +442,7 @@
         "2"
       ],
       "return_code": 0,
-      "duration_seconds": 0.55,
+      "duration_seconds": 0.28,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\20_goal_status_snapshot.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\20_goal_status_snapshot.stderr.txt",
       "passed": true
@@ -458,7 +458,7 @@
         "2"
       ],
       "return_code": 0,
-      "duration_seconds": 0.54,
+      "duration_seconds": 0.171,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\21_goal_unblock_board.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\21_goal_unblock_board.stderr.txt",
       "passed": true
@@ -474,7 +474,7 @@
         "2"
       ],
       "return_code": 0,
-      "duration_seconds": 0.519,
+      "duration_seconds": 0.635,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\22_goal_execution_packet.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\22_goal_execution_packet.stderr.txt",
       "passed": true
@@ -488,7 +488,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_bundle_evidence_packs_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.695,
+      "duration_seconds": 0.725,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\23_bundle_evidence_packs.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\23_bundle_evidence_packs.stderr.txt",
       "passed": true
@@ -502,7 +502,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\collect_rk10_runtime_bundle_evidence_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.612,
+      "duration_seconds": 0.56,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\24_rk10_runtime_bundle_evidence_collect.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\24_rk10_runtime_bundle_evidence_collect.stderr.txt",
       "passed": true
@@ -516,7 +516,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\collect_business_data_approval_evidence_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.328,
+      "duration_seconds": 0.266,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\25_business_data_approval_evidence_collect.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\25_business_data_approval_evidence_collect.stderr.txt",
       "passed": true
@@ -530,7 +530,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\collect_s44_business_review_evidence_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.503,
+      "duration_seconds": 0.479,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\26_s44_business_review_evidence_collect.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\26_s44_business_review_evidence_collect.stderr.txt",
       "passed": true
@@ -544,7 +544,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\collect_s70_payment_approval_evidence_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 1.016,
+      "duration_seconds": 0.512,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\27_s70_payment_approval_evidence_collect.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\27_s70_payment_approval_evidence_collect.stderr.txt",
       "passed": true
@@ -558,7 +558,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\collect_s71_paid_azure_ocr_evidence_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.275,
+      "duration_seconds": 0.514,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\28_s71_paid_azure_ocr_evidence_collect.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\28_s71_paid_azure_ocr_evidence_collect.stderr.txt",
       "passed": true
@@ -572,7 +572,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\collect_outlook_bundle_evidence_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.203,
+      "duration_seconds": 0.429,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\29_outlook_bundle_evidence_collect.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\29_outlook_bundle_evidence_collect.stderr.txt",
       "passed": true
@@ -586,7 +586,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_bundle_operator_sheet_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.187,
+      "duration_seconds": 0.679,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\30_bundle_operator_sheet.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\30_bundle_operator_sheet.stderr.txt",
       "passed": true
@@ -600,7 +600,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\stage_final_evidence_candidates_20260621.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.445,
+      "duration_seconds": 1.1,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\31_final_evidence_candidate_stage.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\31_final_evidence_candidate_stage.stderr.txt",
       "passed": true
@@ -614,7 +614,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\sync_unified_final_evidence_intake_20260621.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.237,
+      "duration_seconds": 0.182,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\32_unified_final_evidence_intake_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\32_unified_final_evidence_intake_sync.stderr.txt",
       "passed": true
@@ -628,7 +628,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\sync_execution_packet_candidate_evidence_paths_20260621.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.792,
+      "duration_seconds": 0.25,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\33_execution_packet_candidate_path_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\33_execution_packet_candidate_path_sync.stderr.txt",
       "passed": true
@@ -642,7 +642,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\sync_bundle_evidence_intake_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.502,
+      "duration_seconds": 0.373,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\34_bundle_evidence_intake_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\34_bundle_evidence_intake_sync.stderr.txt",
       "passed": true
@@ -656,7 +656,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\validate_bundle_evidence_packs_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.571,
+      "duration_seconds": 1.127,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\35_bundle_evidence_pack_validation.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\35_bundle_evidence_pack_validation.stderr.txt",
       "passed": true
@@ -670,7 +670,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\backup_goal_code_artifacts_20260620_ai_default_probe_20260622.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.997,
+      "duration_seconds": 0.493,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\36_goal_code_artifact_backup.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\36_goal_code_artifact_backup.stderr.txt",
       "passed": true
@@ -684,7 +684,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_external_approval_runbook_20260620_ai_default_probe_20260622.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.269,
+      "duration_seconds": 0.192,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\37_external_approval_runbook.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\37_external_approval_runbook.stderr.txt",
       "passed": true
@@ -698,7 +698,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\diagnose_outlook_com_environment_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 2.427,
+      "duration_seconds": 1.721,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\38_outlook_com_environment_diagnosis.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\38_outlook_com_environment_diagnosis.stderr.txt",
       "passed": true
@@ -714,7 +714,7 @@
         "2"
       ],
       "return_code": 0,
-      "duration_seconds": 0.248,
+      "duration_seconds": 0.192,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\39_next_approval_queue.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\39_next_approval_queue.stderr.txt",
       "passed": true
@@ -728,7 +728,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_operator_evidence_prefill_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.668,
+      "duration_seconds": 0.172,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\40_operator_evidence_prefill.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\40_operator_evidence_prefill.stderr.txt",
       "passed": true
@@ -742,7 +742,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_remaining_approval_next_steps_20260621.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.703,
+      "duration_seconds": 0.278,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\41_remaining_approval_next_steps.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\41_remaining_approval_next_steps.stderr.txt",
       "passed": true
@@ -756,7 +756,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\validate_goal_execution_packet_scope_exclusions_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.384,
+      "duration_seconds": 0.344,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\42_goal_execution_packet_validation.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\42_goal_execution_packet_validation.stderr.txt",
       "passed": true
@@ -770,7 +770,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_final_evidence_fill_queue_20260621.py"
       ],
       "return_code": 0,
-      "duration_seconds": 1.076,
+      "duration_seconds": 0.235,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\43_final_evidence_fill_queue.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\43_final_evidence_fill_queue.stderr.txt",
       "passed": true
@@ -784,7 +784,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_final_input_autonomous_boundary_20260622.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.261,
+      "duration_seconds": 0.62,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\44_final_input_autonomous_boundary_for_operator_packet.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\44_final_input_autonomous_boundary_for_operator_packet.stderr.txt",
       "passed": true
@@ -798,7 +798,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_remaining_operator_evidence_digest_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.255,
+      "duration_seconds": 0.598,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\45_remaining_operator_evidence_digest.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\45_remaining_operator_evidence_digest.stderr.txt",
       "passed": true
@@ -813,7 +813,7 @@
         "--all-active"
       ],
       "return_code": 0,
-      "duration_seconds": 0.398,
+      "duration_seconds": 0.631,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\46_next_bundle_minimum_input_packet.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\46_next_bundle_minimum_input_packet.stderr.txt",
       "passed": true
@@ -827,7 +827,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_remaining_operator_input_packet_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.246,
+      "duration_seconds": 0.331,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\47_remaining_operator_input_packet.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\47_remaining_operator_input_packet.stderr.txt",
       "passed": true
@@ -841,7 +841,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\validate_remaining_operator_input_ready_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.708,
+      "duration_seconds": 0.449,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\48_remaining_operator_input_ready_validation.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\48_remaining_operator_input_ready_validation.stderr.txt",
       "passed": true
@@ -855,7 +855,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_remaining_operator_final_review_pack_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.237,
+      "duration_seconds": 0.467,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\49_remaining_operator_final_review_pack.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\49_remaining_operator_final_review_pack.stderr.txt",
       "passed": true
@@ -869,7 +869,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_minimum_operator_review_input_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.4,
+      "duration_seconds": 0.578,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\50_minimum_operator_review_input.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\50_minimum_operator_review_input.stderr.txt",
       "passed": true
@@ -883,7 +883,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_remaining_operator_decision_brief_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.238,
+      "duration_seconds": 0.698,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\51_remaining_operator_decision_brief.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\51_remaining_operator_decision_brief.stderr.txt",
       "passed": true
@@ -897,7 +897,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\sync_remaining_operator_input_packet_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.187,
+      "duration_seconds": 0.861,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\52_remaining_operator_input_packet_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\52_remaining_operator_input_packet_sync.stderr.txt",
       "passed": true
@@ -911,7 +911,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\validate_goal_execution_packet_scope_exclusions_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.517,
+      "duration_seconds": 1.025,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\53_goal_execution_packet_validation_after_remaining_operator_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\53_goal_execution_packet_validation_after_remaining_operator_sync.stderr.txt",
       "passed": true
@@ -925,7 +925,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_final_evidence_fill_queue_20260621.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.264,
+      "duration_seconds": 0.857,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\54_final_evidence_fill_queue_after_remaining_operator_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\54_final_evidence_fill_queue_after_remaining_operator_sync.stderr.txt",
       "passed": true
@@ -939,7 +939,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_remaining_operator_input_packet_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.217,
+      "duration_seconds": 0.185,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\55_remaining_operator_input_packet_after_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\55_remaining_operator_input_packet_after_sync.stderr.txt",
       "passed": true
@@ -953,7 +953,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\validate_remaining_operator_input_ready_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.22,
+      "duration_seconds": 0.156,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\56_remaining_operator_input_ready_validation_after_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\56_remaining_operator_input_ready_validation_after_sync.stderr.txt",
       "passed": true
@@ -967,7 +967,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_remaining_operator_final_review_pack_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.192,
+      "duration_seconds": 0.16,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\57_remaining_operator_final_review_pack_after_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\57_remaining_operator_final_review_pack_after_sync.stderr.txt",
       "passed": true
@@ -981,7 +981,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_minimum_operator_review_input_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.605,
+      "duration_seconds": 0.259,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\58_minimum_operator_review_input_after_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\58_minimum_operator_review_input_after_sync.stderr.txt",
       "passed": true
@@ -995,7 +995,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_remaining_operator_decision_brief_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.207,
+      "duration_seconds": 0.197,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\59_remaining_operator_decision_brief_after_sync.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\59_remaining_operator_decision_brief_after_sync.stderr.txt",
       "passed": true
@@ -1009,7 +1009,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\simulate_remaining_operator_input_completion_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.438,
+      "duration_seconds": 0.384,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\60_remaining_operator_input_completion_simulation.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\60_remaining_operator_input_completion_simulation.stderr.txt",
       "passed": true
@@ -1023,7 +1023,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\simulate_remaining_operator_full_gate_completion_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 7.839,
+      "duration_seconds": 5.556,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\61_remaining_operator_full_gate_simulation.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\61_remaining_operator_full_gate_simulation.stderr.txt",
       "passed": true
@@ -1037,7 +1037,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_remaining_approval_next_steps_20260621.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.341,
+      "duration_seconds": 0.593,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\62_remaining_approval_next_steps_after_minimum_packet.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\62_remaining_approval_next_steps_after_minimum_packet.stderr.txt",
       "passed": true
@@ -1051,7 +1051,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_customer_safe_entries_full_smoke_report_20260622.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.379,
+      "duration_seconds": 0.679,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\63_customer_safe_scenario_matrix.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\63_customer_safe_scenario_matrix.stderr.txt",
       "passed": true
@@ -1065,7 +1065,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_prod_migration_readiness_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.634,
+      "duration_seconds": 0.486,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\64_prod_migration_readiness.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\64_prod_migration_readiness.stderr.txt",
       "passed": true
@@ -1081,7 +1081,7 @@
         "2"
       ],
       "return_code": 0,
-      "duration_seconds": 0.262,
+      "duration_seconds": 0.608,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\65_goal_evidence_ledger.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\65_goal_evidence_ledger.stderr.txt",
       "passed": true
@@ -1095,7 +1095,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_goal_evidence_actual_trace_overlay_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.252,
+      "duration_seconds": 0.485,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\66_goal_evidence_actual_trace_overlay.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\66_goal_evidence_actual_trace_overlay.stderr.txt",
       "passed": true
@@ -1109,7 +1109,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_goal_status_snapshot_rks_runtime_overlay_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.224,
+      "duration_seconds": 0.483,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\67_goal_status_rks_runtime_overlay.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\67_goal_status_rks_runtime_overlay.stderr.txt",
       "passed": true
@@ -1123,7 +1123,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_goal_completion_audit_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.239,
+      "duration_seconds": 0.822,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\68_goal_completion_audit.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\68_goal_completion_audit.stderr.txt",
       "passed": true
@@ -1137,7 +1137,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_goal_requirement_traceability_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.251,
+      "duration_seconds": 0.868,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\69_goal_requirement_traceability.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\69_goal_requirement_traceability.stderr.txt",
       "passed": true
@@ -1151,7 +1151,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_goal_completion_gate_20260620_open_probe_20260622.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.624,
+      "duration_seconds": 0.907,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\70_goal_completion_gate.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\70_goal_completion_gate.stderr.txt",
       "passed": true
@@ -1165,7 +1165,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_objective_completion_audit_20260623.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.261,
+      "duration_seconds": 0.9,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\71_objective_completion_audit.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\71_objective_completion_audit.stderr.txt",
       "passed": true
@@ -1179,7 +1179,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_goal_final_report_20260620.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.22,
+      "duration_seconds": 0.165,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\72_goal_final_report.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\72_goal_final_report.stderr.txt",
       "passed": true
@@ -1193,7 +1193,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_prod_readiness_remaining_work_breakdown_20260622.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.328,
+      "duration_seconds": 0.283,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\73_prod_readiness_remaining_work_breakdown.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\73_prod_readiness_remaining_work_breakdown.stderr.txt",
       "passed": true
@@ -1207,7 +1207,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_final_input_autonomous_boundary_20260622.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.443,
+      "duration_seconds": 0.174,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\74_final_input_autonomous_boundary.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\74_final_input_autonomous_boundary.stderr.txt",
       "passed": true
@@ -1221,7 +1221,7 @@
         "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\tools\\generate_completion_blocker_split_20260622.py"
       ],
       "return_code": 0,
-      "duration_seconds": 0.225,
+      "duration_seconds": 0.196,
       "stdout_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\75_completion_blocker_split.stdout.txt",
       "stderr_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\75_completion_blocker_split.stderr.txt",
       "passed": true

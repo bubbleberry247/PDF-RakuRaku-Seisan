@@ -300,6 +300,7 @@ def is_complete_requirement(row: dict[str, Any]) -> bool:
     return str(row.get("current_status", "")) in {
         "COMPLETE",
         "OK",
+        "PROVED",
         "OK_FOR_SAFE_CHECKS_ONLY",
         "OK_FOR_BUNDLE_RUNBOOK_ONLY",
     }
@@ -835,6 +836,26 @@ def build_payload(
 
 def build_markdown(payload: dict[str, Any]) -> str:
     status = "完了" if payload["final_goal_complete"] else "未完了（ドラフト）"
+    objective_progress = payload.get("objective_progress_summary", {})
+    if not isinstance(objective_progress, dict):
+        objective_progress = {}
+    scenario_count = int(objective_progress.get("scenario_count", 0) or 0)
+    final_evidence_ready_count = int(
+        objective_progress.get("final_evidence_ready_count", 0) or 0
+    )
+    if payload["final_goal_complete"]:
+        boundary_lines = [
+            "- `final_goal_complete=True` means the safe production-migration readiness gate passed.",
+            "- This report is not proof that irreversible production actions were performed.",
+            "- It does not run Outlook, RK10, Rakuraku, Azure, mail, print, payment, MainSV, or production writes.",
+            "- RKS `OK_CANDIDATE`, static guard, or safe-stop evidence is reported with its exact scope, not promoted silently.",
+        ]
+    else:
+        boundary_lines = [
+            "- This is not a production completion report until `final_goal_complete=True`.",
+            "- It does not run Outlook, RK10, Rakuraku, Azure, mail, print, payment, MainSV, or production writes.",
+            "- RKS `OK_CANDIDATE`, static guard, or safe-stop evidence is not treated as production runtime completion.",
+        ]
     lines = [
         "# 全シナリオ稼働確認 最終報告ドラフト 2026-06-20",
         "",
@@ -847,18 +868,25 @@ def build_markdown(payload: dict[str, Any]) -> str:
         f"- gate_progress: `{payload['passed_gate_count']}/{payload['gate_count']}`",
         f"- blocking_gate_count: `{payload['blocking_gate_count']}`",
         f"- requirement_progress: `{payload['requirement_count'] - payload['incomplete_requirement_count']}/{payload['requirement_count']}`",
-        f"- scenario_goal_evidence: `{payload['complete_goal_evidence_count']}/{payload['scenario_count']}`",
+        f"- strict_scenario_goal_evidence: `{payload['complete_goal_evidence_count']}/{payload['scenario_count']}`",
+        f"- final_evidence_ready: `{final_evidence_ready_count}/{scenario_count}`",
         "",
         "## Boundary",
         "",
-        "- This is not a production completion report until `final_goal_complete=True`.",
-        "- It does not run Outlook, RK10, Rakuraku, Azure, mail, print, payment, MainSV, or production writes.",
-        "- RKS `OK_CANDIDATE`, static guard, or safe-stop evidence is not treated as production runtime completion.",
+        *boundary_lines,
         "",
     ]
-    objective_progress = payload.get("objective_progress_summary", {})
-    if isinstance(objective_progress, dict):
-        scenario_count = int(objective_progress.get("scenario_count", 0) or 0)
+    if objective_progress:
+        if payload["final_goal_complete"]:
+            objective_note = (
+                "- These counts are strict source-scope details; the final verdict "
+                "comes from the completion gate and final evidence chain."
+            )
+        else:
+            objective_note = (
+                "- These counts are progress evidence only; they do not override "
+                "`final_goal_complete=False`."
+            )
         lines.extend(
             [
                 "## Objective Progress Summary",
@@ -870,7 +898,7 @@ def build_markdown(payload: dict[str, Any]) -> str:
                 f"- business_count_only_scope_count: `{objective_progress.get('business_count_only_scope_count', 0)}/{scenario_count}`",
                 f"- business_cost_scope_count: `{objective_progress.get('business_amount_or_draft_count', 0) + objective_progress.get('business_count_only_scope_count', 0)}/{scenario_count}`",
                 f"- final_evidence_ready_count: `{objective_progress.get('final_evidence_ready_count', 0)}/{scenario_count}`",
-                "- These counts are progress evidence only; they do not override `final_goal_complete=False`.",
+                objective_note,
                 "",
             ]
         )
@@ -1020,8 +1048,15 @@ def build_markdown(payload: dict[str, Any]) -> str:
     )
     audit_summary = payload.get("completion_audit_summary", {})
     if isinstance(audit_summary, dict):
+        audit_scope_note = (
+            "strict ledger audit before final evidence overlay; final verdict is "
+            "taken from goal_completion_gate"
+            if payload["final_goal_complete"]
+            else "strict ledger audit; unresolved rows keep the report in draft"
+        )
         lines.extend(
             [
+                f"- audit_scope_note: `{audit_scope_note}`",
                 f"- audit_status: `{audit_summary.get('report_status', '')}`",
                 f"- audit_goal_complete: `{audit_summary.get('overall_goal_complete', False)}`",
                 f"- issue_count: `{audit_summary.get('issue_count', 0)}`",

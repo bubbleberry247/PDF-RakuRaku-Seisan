@@ -24,6 +24,19 @@ def write_json(path: Path, payload: dict) -> Path:
     return path
 
 
+def test_proved_requirement_is_complete() -> None:
+    module = load_module()
+
+    rows = [
+        {"requirement_id": "REQ-01", "current_status": "PROVED"},
+        {"requirement_id": "REQ-12", "current_status": "PARTIAL_OK"},
+    ]
+
+    incomplete = module.incomplete_requirements(rows)
+
+    assert [row["requirement_id"] for row in incomplete] == ["REQ-12"]
+
+
 def test_build_payload_marks_incomplete_as_draft_not_final(tmp_path: Path) -> None:
     module = load_module()
     completion_gate = write_json(
@@ -688,6 +701,57 @@ def test_build_markdown_includes_strict_boundary_and_sources() -> None:
     assert "scenario44_review_aid_csv" in markdown
     assert r"C:\review\s44_business_review_aid.csv" in markdown
     assert r"C:\completion.json" in markdown
+
+
+def test_build_markdown_uses_final_gate_boundary_when_complete() -> None:
+    module = load_module()
+    payload = {
+        "generated_at": "2026-06-24T02:50:00",
+        "report_status": "FINAL_COMPLETE_REPORT",
+        "final_goal_complete": True,
+        "safety": "read-only",
+        "safe_runner_passed": True,
+        "gate_count": 10,
+        "passed_gate_count": 10,
+        "blocking_gate_count": 0,
+        "requirement_count": 12,
+        "incomplete_requirement_count": 2,
+        "scenario_count": 15,
+        "complete_goal_evidence_count": 0,
+        "objective_progress_summary": {
+            "scenario_count": 15,
+            "sample_ready_count": 15,
+            "safe_execution_ready_count": 15,
+            "rks_scoped_or_not_applicable_count": 7,
+            "business_amount_or_draft_count": 8,
+            "business_count_only_scope_count": 7,
+            "final_evidence_ready_count": 15,
+        },
+        "completion_audit_summary": {
+            "report_status": "CURRENT_AUDIT_NOT_FINAL",
+            "overall_goal_complete": False,
+            "issue_count": 15,
+            "missing_source_count": 0,
+        },
+        "blocking_gates": [],
+        "incomplete_requirements": [],
+        "ledger_rows": [],
+        "next_bundle": "",
+        "next_operator_action": "",
+        "next_action_summary": {},
+        "source_paths": {"completion_gate": r"C:\completion.json"},
+        "source_exists": {"completion_gate": True},
+    }
+
+    markdown = module.build_markdown(payload)
+
+    assert "safe production-migration readiness gate passed" in markdown
+    assert "not proof that irreversible production actions were performed" in markdown
+    assert "strict_scenario_goal_evidence: `0/15`" in markdown
+    assert "final_evidence_ready: `15/15`" in markdown
+    assert "final verdict comes from the completion gate" in markdown
+    assert "do not override `final_goal_complete=False`" not in markdown
+    assert "- scenario_goal_evidence:" not in markdown
 
 
 def test_write_outputs_creates_field_csv_exports(tmp_path: Path) -> None:

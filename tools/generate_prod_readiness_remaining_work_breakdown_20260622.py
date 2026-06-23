@@ -336,8 +336,29 @@ def markdown_cell(value: object) -> str:
     return text if text else "-"
 
 
+def final_goal_complete_from_line(value: str) -> bool:
+    return "`True`" in value or value.strip().endswith(": True")
+
+
 def build_markdown(payload: dict[str, Any], out_dir: Path) -> str:
     summary = payload["summary"]
+    final_goal_complete = final_goal_complete_from_line(summary["goal_complete_line"])
+    if final_goal_complete:
+        conclusion_lines = [
+            "- 固定ランナーと最終ゲートは通過しており、本番移行OK状態として扱えます。",
+            "- この分類は残作業ではなく、実送信・実印刷・支払実行などを追加で行う場合の安全境界です。",
+            "- Codex側で自動継続できるのは、証跡整理、固定ランナー再実行、C/E同期までです。",
+            "- Open欄の `RK10_EDITOR_OPEN_CONFIRMED_ONLY` はRK10エディタで開けた補助証跡であり、Build/Runtime/Clean Logは昇格していません。",
+            "- 支払実行、実送信、実印刷、Rakuraku本番登録、RK10 ButtonRun、paid Azure OCRは別承認なしで実施しません。",
+        ]
+    else:
+        conclusion_lines = [
+            "- 固定ランナーは通過していますが、最終ゴールは未完了です。",
+            "- 残りは主に `operator_result` / `reviewer` / `reviewed_at` の人間の最終入力と、外部環境・業務承認が必要なゲートです。",
+            "- Codex側で自動継続できるのは、証跡整理、入力箇所案内、固定ランナー再実行、C/E同期までです。",
+            "- Open欄の `RK10_EDITOR_OPEN_CONFIRMED_ONLY` はRK10エディタで開けた補助証跡であり、Build/Runtime/Clean Logは昇格していません。",
+            "- 支払実行、実送信、実印刷、Rakuraku本番登録、RK10 ButtonRun、paid Azure OCRは別承認なしで実施しません。",
+        ]
     lines = [
         "# 本番移行OKまでの残作業分類 2026-06-22",
         "",
@@ -355,11 +376,7 @@ def build_markdown(payload: dict[str, Any], out_dir: Path) -> str:
         "",
         "## 結論",
         "",
-        "- 固定ランナーは通過していますが、最終ゴールは未完了です。",
-        "- 残りは主に `operator_result` / `reviewer` / `reviewed_at` の人間の最終入力と、外部環境・業務承認が必要なゲートです。",
-        "- Codex側で自動継続できるのは、証跡整理、入力箇所案内、固定ランナー再実行、C/E同期までです。",
-        "- Open欄の `RK10_EDITOR_OPEN_CONFIRMED_ONLY` はRK10エディタで開けた補助証跡であり、Build/Runtime/Clean Logは昇格していません。",
-        "- 支払実行、実送信、実印刷、Rakuraku本番登録、RK10 ButtonRun、paid Azure OCRは別承認なしで実施しません。",
+        *conclusion_lines,
         "",
         "## Bundle Classification",
         "",
