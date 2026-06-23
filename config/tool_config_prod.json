@@ -643,9 +643,12 @@
     ]
   },
   "mail": {
-    "send_success": false,
-    "success_to": [],
+    "send_success": true,
+    "success_to": [
+      "seikyu.tic@tokai-ic.co.jp"
+    ],
     "error_to": [
+      "seikyu.tic@tokai-ic.co.jp",
       "kalimistk@gmail.com"
     ],
     "error_cc": []
