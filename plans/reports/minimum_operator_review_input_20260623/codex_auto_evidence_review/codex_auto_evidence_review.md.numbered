@@ -1,0 +1,25 @@
+    1: # Codex Auto Evidence Review
+    2:
+    3: - generated_at: `2026-06-23T17:51:29`
+    4: - dry_run: `False`
+    5: - ready_to_write: `True`
+    6: - minimum_csv_exists: `True`
+    7: - safe_summary_overall_passed: `True`
+    8: - row_count: `0`
+    9: - already_complete: `True`
+   10: - updated_count: `0`
+   11: - unchanged_count: `0`
+   12: - blocked_count: `0`
+   13: - backup_path: ``
+   14:
+   15: ## Safety
+   16:
+   17: - This records Codex automated evidence confirmation only.
+   18: - It only writes operator_result/reviewer/reviewed_at in minimum_operator_review_input.csv.
+   19: - It does not run RK10, send mail, print, submit, pay, call paid OCR, or write production files.
+   20: - OK means the latest fixed safe-check summary passed and the row has an existing latest evidence file.
+   21:
+   22: ## Row Results
+   23:
+   24: | bundle | scenario | status | reason | latest_evidence_file |
+   25: |---|---|---|---|---|

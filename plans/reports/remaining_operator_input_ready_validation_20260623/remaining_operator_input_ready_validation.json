@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-06-23T18:00:23",
+  "ready_to_run_after_fill": true,
+  "overall_goal_complete": false,
+  "safety": "read-only remaining operator input preflight; no approval creation, no RK10 ButtonRun, no production write, no mail, no print, no submit, no payment, no paid Azure OCR",
+  "remaining_input_csv": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\remaining_operator_input_packet_20260623\\remaining_operator_input.csv",
+  "remaining_input_csv_exists": true,
+  "row_count": 0,
+  "raw_row_count": 0,
+  "raw_not_ready_row_count": 0,
+  "scope_exclusion_count": 1,
+  "scope_exclusions_path": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\objective_scope_exclusions_20260623\\objective_scope_exclusions.json",
+  "scope_exclusions": [
+    {
+      "scenario": "43",
+      "reason": "ユーザー指示: シナリオ43は実装間違いがあり別システムで修正中のためスキップ",
+      "requested_by": "user",
+      "requested_at": "2026-06-23T10:06:11",
+      "evidence": "Codex session instruction on 2026-06-23: シナリオ４３は実装間違いがあったので別システムで修正中なのでスキップして"
+    }
+  ],
+  "excluded_row_count": 0,
+  "complete_operator_row_count": 0,
+  "approved_operator_result_row_count": 0,
+  "not_ready_row_count": 0,
+  "missing_operator_field_row_count": 0,
+  "non_approved_result_row_count": 0,
+  "missing_evidence_row_count": 0,
+  "unsafe_or_missing_target_row_count": 0,
+  "rows": [],
+  "excluded_rows": []
+}

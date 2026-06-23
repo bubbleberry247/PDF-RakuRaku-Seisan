@@ -1,0 +1,82 @@
+    1: @echo off
+    2:
+    3: setlocal
+    4:
+    5: set "PACK_DIR=%~dp0"
+    6:
+    7: for %%I in ("%PACK_DIR%..") do set "REPORTS_DIR=%%~fI"
+    8:
+    9: for %%I in ("%REPORTS_DIR%\..\..") do set "ROOT_DIR=%%~fI"
+   10:
+   11: set "PY=C:\Users\masam\AppData\Local\Programs\Python\Python313\python.exe"
+   12:
+   13: if not exist "%PY%" set "PY=python"
+   14:
+   15: set "AUTO_FILL_TOOL=%ROOT_DIR%\tools\auto_fill_minimum_operator_review_input_20260623.py"
+   16:
+   17: set "MINIMUM_CSV=%PACK_DIR%minimum_operator_review_input.csv"
+   18:
+   19: set "SAFE_JSON=%REPORTS_DIR%\safe_goal_checks_20260620\safe_goal_checks_summary.json"
+   20:
+   21: set "SAFE_MD=%REPORTS_DIR%\safe_goal_checks_20260620\safe_goal_checks_summary.md.numbered"
+   22:
+   23: set "APPLY_BAT=%PACK_DIR%APPLY_AND_RUN_AFTER_FILL_minimum_operator_review_input.bat"
+   24:
+   25:
+   26:
+   27: if not exist "%AUTO_FILL_TOOL%" (
+   28:
+   29:   echo Missing Codex auto evidence tool: "%AUTO_FILL_TOOL%"
+   30:
+   31:   echo Run this from the canonical working repository, not from a detached review-only copy.
+   32:
+   33:   pause
+   34:
+   35:   exit /b 1
+   36:
+   37: )
+   38:
+   39: if not exist "%MINIMUM_CSV%" (
+   40:
+   41:   echo Missing minimum CSV: "%MINIMUM_CSV%"
+   42:
+   43:   pause
+   44:
+   45:   exit /b 1
+   46:
+   47: )
+   48:
+   49: if not exist "%APPLY_BAT%" (
+   50:
+   51:   echo Missing apply BAT: "%APPLY_BAT%"
+   52:
+   53:   pause
+   54:
+   55:   exit /b 1
+   56:
+   57: )
+   58:
+   59:
+   60:
+   61: echo [1/2] Codex auto evidence review fills the final 10 rows...
+   62:
+   63: "%PY%" -X utf8 "%AUTO_FILL_TOOL%" --minimum-csv "%MINIMUM_CSV%" --safe-summary-json "%SAFE_JSON%" --safe-summary-md "%SAFE_MD%" --out-dir "%PACK_DIR%codex_auto_evidence_review"
+   64:
+   65: if errorlevel 1 (
+   66:
+   67:   echo Codex auto evidence review failed. Check "%PACK_DIR%codex_auto_evidence_review".
+   68:
+   69:   pause
+   70:
+   71:   exit /b 1
+   72:
+   73: )
+   74:
+   75:
+   76:
+   77: echo [2/2] Applying filled rows and running fixed safe checks...
+   78:
+   79: call "%APPLY_BAT%"
+   80:
+   81: exit /b %ERRORLEVEL%
+   82:

@@ -2297,11 +2297,16 @@ def _extract_invoice_no_from_text(text: str) -> str | None:
     return None
 
 
+def _normalize_spaced_cjk_ocr_artifacts(text: str) -> str:
+    spaced_cjk_run_re = re.compile(r"(?<!\S)((?:[^\x00-\x7f]\s+){2,}[^\x00-\x7f])(?!\S)")
+    return spaced_cjk_run_re.sub(lambda match: re.sub(r"\s+", "", match.group(1)), text)
+
+
 def _extract_invoice_fields(text: str, company_deny_regex: str | None) -> ExtractedPdfFields | None:
     text = _normalize_text(text)
     # Normalize spaced-out CJK characters (PDF text extraction artifact).
     # Example: "東 海 イ ン プ ル 建 設" → "東海インプル建設"
-    text = re.sub(r"(?<=[^\x00-\x7f]) (?=[^\x00-\x7f])", "", text)
+    text = _normalize_spaced_cjk_ocr_artifacts(text)
     # Fix common OCR reversals (e.g. some OCR engines reverse "株式会社" to "会社株式").
     text = text.replace("会社株式", "株式会社")
     # Normalize spaced commas inside numbers: "1, 651,980" → "1,651,980"

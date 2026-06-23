@@ -44,3 +44,24 @@ class TestExtractInvoiceFields(unittest.TestCase):
         self.assertEqual(fields.vendor, "キョーワ株式会社 名古屋支店")
         self.assertEqual(fields.issue_date, "20260125")
         self.assertEqual(fields.amount, 285_758)
+
+    def test_extract_invoice_fields_collapses_spaced_ocr_vendor_artifact(self) -> None:
+        # Arrange
+        text = """
+東海インフラ建設株式会社 御中
+キ ョ ー ワ 株 式 会 社
+請求年月日：2026/1/25
+支払決定金額 285,758
+"""
+
+        # Act
+        fields = MODULE._extract_invoice_fields(  # type: ignore[attr-defined]
+            text=text, company_deny_regex="東海インフラ建設株式会社"
+        )
+
+        # Assert
+        self.assertIsNotNone(fields)
+        assert fields is not None
+        self.assertEqual(fields.vendor, "キョーワ株式会社")
+        self.assertEqual(fields.issue_date, "20260125")
+        self.assertEqual(fields.amount, 285_758)

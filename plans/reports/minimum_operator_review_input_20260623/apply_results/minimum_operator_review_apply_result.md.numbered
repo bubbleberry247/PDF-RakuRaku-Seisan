@@ -1,0 +1,19 @@
+    1: # Minimum Operator Review Apply Result
+    2:
+    3: - generated_at: `2026-06-23T17:51:30`
+    4: - dry_run: `False`
+    5: - minimum_row_count: `0`
+    6: - complete_input_count: `0`
+    7: - incomplete_input_count: `0`
+    8: - skipped_count: `0`
+    9: - blocking_result_count: `0`
+   10: - ready_to_apply: `True`
+   11: - updated_count: `0`
+   12: - would_update_count: `0`
+   13: - error_count: `0`
+   14: - backup_path: ``
+   15: - validation_exit_code: `0`
+   16:
+   17: ## Row Results
+   18: | bundle | scenario | status | updated_fields | reason |
+   19: |---|---|---|---|---|

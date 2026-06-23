@@ -1,0 +1,39 @@
+# Objective Completion Audit 2026-06-23
+
+- generated_at: `2026-06-23T18:00:36`
+- overall_goal_complete: `True`
+- requirement_count: `9`
+- proved_count: `9`
+- partial_count: `0`
+- not_proved_count: `0`
+- total_scenario_count: `15`
+- scenario_count: `14`
+- scope_exclusion_count: `1`
+- scope_exclusions_path: `C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\objective_scope_exclusions_20260623\objective_scope_exclusions.json`
+- sample_ready_count: `14`
+- safe_execution_ready_count: `14`
+- business_cost_ready_count: `14`
+- rks_runtime_resolved_count: `14`
+- final_evidence_ready_count: `14`
+- remaining_operator_not_ready_count: `0`
+- safety: `read-only objective audit; no RK10 ButtonRun, no production write, no real mail, no real print, no final submit, no payment, no paid Azure OCR`
+
+## Scope Exclusions
+
+| Scenario | Reason | Requested By | Requested At | Evidence |
+|---|---|---|---|---|
+| 43 | ユーザー指示: シナリオ43は実装間違いがあり別システムで修正中のためスキップ | user | 2026-06-23T10:06:11 | Codex session instruction on 2026-06-23: シナリオ４３は実装間違いがあったので別システムで修正中なのでスキップして |
+
+## Requirement Results
+
+| ID | Requirement | Status | Current Value | Remaining Gap | Next Action | Evidence |
+|---|---|---|---|---|---|---|
+| REQ-01 | 全シナリオのサンプルデータを用意する | PROVED | sample_ready_count=14/14; excluded_scope_count=1 |  | 不足シナリオのsample_data_evidenceを追加する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_ledger_20260620\goal_evidence_ledger.json |
+| REQ-02 | PY/Pythonツールを安全スコープで実行し、エラーなく終了する | PROVED | overall_passed=True |  | 失敗ステップを修正し、固定安全ランナーを再実行する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\safe_goal_checks_20260620\safe_goal_checks_summary.json |
+| REQ-03 | RKSファイルのopen/build/runtime/safe-stop証跡をスコープ付きで確認する | PROVED | rks_runtime_resolved_count=14/14; excluded_scope_count=1 |  | RKS要否判断、RK10 open/build/runtime/latest clean log、または前提保留の承認を記録する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_ledger_20260620\goal_evidence_ledger.json |
+| REQ-04 | 実際の業務費用・件数・金額スコープを証跡化する | PROVED | business_cost_ready_count=14/14; excluded_scope_count=1 |  | 不足シナリオの件数/金額/安全dry-run証跡を追加する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_ledger_20260620\goal_evidence_ledger.json |
+| REQ-05 | 全シナリオの安全実行証跡を揃える | PROVED | safe_execution_ready_count=14/14; excluded_scope_count=1 |  | 不足シナリオの安全実行またはsafe-stop証跡を追加する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_evidence_ledger_20260620\goal_evidence_ledger.json |
+| REQ-06 | エラー発生時は原因究明と対策を実装する | PROVED | final_goal_complete=True; blocking_gate_count=0 |  | 追加対応なし。固定安全ランナーと完了ゲートは通過済み。 | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_completion_gate_20260620\goal_completion_gate.json |
+| REQ-07 | 修正実装ファイルを別名保存でバックアップする | PROVED | backup_complete=True; missing_count=0; snapshot_id=20260623_180012 |  | コード成果物バックアップを再実行する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_code_artifact_backups_20260620\goal_code_artifact_backups.json |
+| REQ-08 | 最終ログ・報告を出し、移行先へ同期する | PROVED | source_count=54; copy_result_count=112; all_hashes_match=True; all_distribution_checks_pass=True; relative_inner_apply_fix=True |  | 同期manifestを再生成し、C/E配布先のhash一致を確認する | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\final_operator_front_door_20260623\sync_manifest_final_operator_front_door_20260623.json; C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\final_operator_front_door_20260623\final_operator_front_door_distribution_check.json |
+| REQ-09 | 本番移行OK状態を最終確定する | PROVED | final_goal_complete=True; passed_gate_count=10/10; active_remaining_operator_not_ready_count=0/0; raw_remaining_operator_not_ready_count=0/0; excluded_scope_count=1 |  | 追加対応なし。Codex自動証跡確認、最終証跡同期、固定安全ランナーは通過済み。 | C:\ProgramData\Generative AI\Github\PDF-RakuRaku-Seisan\plans\reports\goal_completion_gate_20260620\goal_completion_gate.json |

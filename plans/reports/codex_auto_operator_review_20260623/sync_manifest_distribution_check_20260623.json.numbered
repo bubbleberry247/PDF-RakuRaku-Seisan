@@ -1,0 +1,63 @@
+    1: {
+    2:   "generated_at": "2026-06-23T18:04:47",
+    3:   "result_count": 8,
+    4:   "all_hashes_match": true,
+    5:   "results": [
+    6:     {
+    7:       "source": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\codex_auto_operator_review_20260623\\codex_auto_operator_review_summary.md",
+    8:       "destination": "C:\\ProgramData\\RK10\\Robots\\migration\\reports\\final_operator_front_door_20260623_1545\\plans\\reports\\codex_auto_operator_review_20260623\\codex_auto_operator_review_summary.md",
+    9:       "source_sha256": "0A5D53349DFF82BDA2D00A2CE7E3886F457B58DE21A347ADCD72997534872AD2",
+   10:       "destination_sha256": "0A5D53349DFF82BDA2D00A2CE7E3886F457B58DE21A347ADCD72997534872AD2",
+   11:       "hashes_match": true
+   12:     },
+   13:     {
+   14:       "source": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\codex_auto_operator_review_20260623\\codex_auto_operator_review_summary.md.numbered",
+   15:       "destination": "C:\\ProgramData\\RK10\\Robots\\migration\\reports\\final_operator_front_door_20260623_1545\\plans\\reports\\codex_auto_operator_review_20260623\\codex_auto_operator_review_summary.md.numbered",
+   16:       "source_sha256": "AF1A77087FCF1E7E5F78A4D26CD1E7456458AB6818847AB7AC06E08631EECBA0",
+   17:       "destination_sha256": "AF1A77087FCF1E7E5F78A4D26CD1E7456458AB6818847AB7AC06E08631EECBA0",
+   18:       "hashes_match": true
+   19:     },
+   20:     {
+   21:       "source": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\codex_auto_operator_review_20260623\\sync_manifest_codex_auto_operator_review_20260623.json",
+   22:       "destination": "C:\\ProgramData\\RK10\\Robots\\migration\\reports\\final_operator_front_door_20260623_1545\\plans\\reports\\codex_auto_operator_review_20260623\\sync_manifest_codex_auto_operator_review_20260623.json",
+   23:       "source_sha256": "E1B1EF5215D0386E6776BE89CFE8E550CBA53F4ACFE7B4110AE5EAD7BABADC60",
+   24:       "destination_sha256": "E1B1EF5215D0386E6776BE89CFE8E550CBA53F4ACFE7B4110AE5EAD7BABADC60",
+   25:       "hashes_match": true
+   26:     },
+   27:     {
+   28:       "source": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\codex_auto_operator_review_20260623\\sync_manifest_codex_auto_operator_review_20260623.json.numbered",
+   29:       "destination": "C:\\ProgramData\\RK10\\Robots\\migration\\reports\\final_operator_front_door_20260623_1545\\plans\\reports\\codex_auto_operator_review_20260623\\sync_manifest_codex_auto_operator_review_20260623.json.numbered",
+   30:       "source_sha256": "8194AF0D30B0E27FC144E0AE86C9EEBE5DAA3B2F42AF25F56B0365BDF3913E02",
+   31:       "destination_sha256": "8194AF0D30B0E27FC144E0AE86C9EEBE5DAA3B2F42AF25F56B0365BDF3913E02",
+   32:       "hashes_match": true
+   33:     },
+   34:     {
+   35:       "source": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\codex_auto_operator_review_20260623\\codex_auto_operator_review_summary.md",
+   36:       "destination": "E:\\東海インプル建設\\RK10_本番移行キット_20260616\\docs\\latest_readiness_20260622\\final_operator_front_door_20260623_1545\\plans\\reports\\codex_auto_operator_review_20260623\\codex_auto_operator_review_summary.md",
+   37:       "source_sha256": "0A5D53349DFF82BDA2D00A2CE7E3886F457B58DE21A347ADCD72997534872AD2",
+   38:       "destination_sha256": "0A5D53349DFF82BDA2D00A2CE7E3886F457B58DE21A347ADCD72997534872AD2",
+   39:       "hashes_match": true
+   40:     },
+   41:     {
+   42:       "source": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\codex_auto_operator_review_20260623\\codex_auto_operator_review_summary.md.numbered",
+   43:       "destination": "E:\\東海インプル建設\\RK10_本番移行キット_20260616\\docs\\latest_readiness_20260622\\final_operator_front_door_20260623_1545\\plans\\reports\\codex_auto_operator_review_20260623\\codex_auto_operator_review_summary.md.numbered",
+   44:       "source_sha256": "AF1A77087FCF1E7E5F78A4D26CD1E7456458AB6818847AB7AC06E08631EECBA0",
+   45:       "destination_sha256": "AF1A77087FCF1E7E5F78A4D26CD1E7456458AB6818847AB7AC06E08631EECBA0",
+   46:       "hashes_match": true
+   47:     },
+   48:     {
+   49:       "source": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\codex_auto_operator_review_20260623\\sync_manifest_codex_auto_operator_review_20260623.json",
+   50:       "destination": "E:\\東海インプル建設\\RK10_本番移行キット_20260616\\docs\\latest_readiness_20260622\\final_operator_front_door_20260623_1545\\plans\\reports\\codex_auto_operator_review_20260623\\sync_manifest_codex_auto_operator_review_20260623.json",
+   51:       "source_sha256": "E1B1EF5215D0386E6776BE89CFE8E550CBA53F4ACFE7B4110AE5EAD7BABADC60",
+   52:       "destination_sha256": "E1B1EF5215D0386E6776BE89CFE8E550CBA53F4ACFE7B4110AE5EAD7BABADC60",
+   53:       "hashes_match": true
+   54:     },
+   55:     {
+   56:       "source": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\codex_auto_operator_review_20260623\\sync_manifest_codex_auto_operator_review_20260623.json.numbered",
+   57:       "destination": "E:\\東海インプル建設\\RK10_本番移行キット_20260616\\docs\\latest_readiness_20260622\\final_operator_front_door_20260623_1545\\plans\\reports\\codex_auto_operator_review_20260623\\sync_manifest_codex_auto_operator_review_20260623.json.numbered",
+   58:       "source_sha256": "8194AF0D30B0E27FC144E0AE86C9EEBE5DAA3B2F42AF25F56B0365BDF3913E02",
+   59:       "destination_sha256": "8194AF0D30B0E27FC144E0AE86C9EEBE5DAA3B2F42AF25F56B0365BDF3913E02",
+   60:       "hashes_match": true
+   61:     }
+   62:   ]
+   63: }

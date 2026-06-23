@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-06-23T17:51:29",
+  "dry_run": false,
+  "minimum_csv": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\minimum_operator_review_input_20260623\\minimum_operator_review_input.csv",
+  "minimum_csv_exists": true,
+  "reviewer": "CodexAutoEvidenceCheck",
+  "reviewed_at": "2026-06-23T17:51:29",
+  "row_count": 0,
+  "already_complete": true,
+  "updated_count": 0,
+  "would_update_count": 0,
+  "unchanged_count": 0,
+  "blocked_count": 0,
+  "ready_to_write": true,
+  "backup_path": "",
+  "out_dir": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\minimum_operator_review_input_20260623\\codex_auto_evidence_review",
+  "safety": "writes minimum review CSV operator fields only; no RK10 ButtonRun; no production write; no mail; no print; no submit; no payment; no paid Azure OCR",
+  "row_results": [],
+  "safe_summary_source": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\safe_goal_checks_20260620\\safe_goal_checks_summary.json",
+  "safe_summary_exists": true,
+  "safe_summary_overall_passed": true,
+  "safe_summary_generated_at": "2026-06-23T17:47:51"
+}

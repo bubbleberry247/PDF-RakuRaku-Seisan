@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-06-23T17:51:30",
+  "safety": "copies filled operator fields only; no approval creation inside apply; no RK10 run; no mail; no print; no submit; no payment",
+  "dry_run": false,
+  "minimum_csv": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\minimum_operator_review_input_20260623\\minimum_operator_review_input.csv",
+  "target_csv": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\remaining_operator_input_packet_20260623\\remaining_operator_input.csv",
+  "minimum_row_count": 0,
+  "target_row_count": 0,
+  "complete_input_count": 0,
+  "incomplete_input_count": 0,
+  "skipped_count": 0,
+  "blocking_result_count": 0,
+  "ready_to_apply": true,
+  "updated_count": 0,
+  "would_update_count": 0,
+  "error_count": 0,
+  "backup_path": "",
+  "row_results": [],
+  "validation_exit_code": 0,
+  "validation_stdout": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\minimum_operator_review_input_20260623\\apply_results\\post_apply_validation.stdout.txt",
+  "validation_stderr": "C:\\ProgramData\\Generative AI\\Github\\PDF-RakuRaku-Seisan\\plans\\reports\\minimum_operator_review_input_20260623\\apply_results\\post_apply_validation.stderr.txt"
+}
